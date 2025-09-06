@@ -4,7 +4,6 @@ import com.processorchestrator.dao.ProcessRecordDAO;
 import com.processorchestrator.model.ProcessInputData;
 import com.processorchestrator.model.ProcessDetails;
 import com.processorchestrator.service.ProcessOrchestrator;
-import com.processorchestrator.service.ProcessResultService;
 import com.processorchestrator.model.TaskData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,6 +15,7 @@ import java.util.UUID;
 
 /**
  * Controller for managing process execution via ProcessDetails IDs
+ * Simplified to work with 3-table schema
  * 
  * This controller operates on processes using ProcessDetails IDs as the primary identifier
  */
@@ -24,12 +24,10 @@ public class ProcessController {
     
     private final ProcessRecordDAO processRecordDAO;
     private final ProcessOrchestrator processOrchestrator;
-    private final ProcessResultService resultService;
 
-    public ProcessController(ProcessRecordDAO processRecordDAO, ProcessOrchestrator processOrchestrator, ProcessResultService resultService) {
+    public ProcessController(ProcessRecordDAO processRecordDAO, ProcessOrchestrator processOrchestrator) {
         this.processRecordDAO = processRecordDAO;
         this.processOrchestrator = processOrchestrator;
-        this.resultService = resultService;
     }
 
     // ==================== PROCESS EXECUTION MANAGEMENT ====================
@@ -61,7 +59,7 @@ public class ProcessController {
             String processId = generateProcessId(processRecordId);
             
             // Update process record status
-            processRecordDAO.updateStatus(processRecordId, "IN_PROGRESS", processId, Instant.now(), null);
+            processRecordDAO.updateStatus(processRecordId, "IN_PROGRESS", Instant.now(), null);
             
             // Start the process using the orchestrator
             String orchestratorProcessId = processOrchestrator.startProcess(record.getType(), inputData);
@@ -74,7 +72,7 @@ public class ProcessController {
             logger.error("Failed to start process: {}", processRecordId, e);
             
             // Update process record status to failed
-            processRecordDAO.updateStatus(processRecordId, "FAILED", null, Instant.now(), e.getMessage());
+            processRecordDAO.updateStatus(processRecordId, "FAILED", Instant.now(), e.getMessage());
             
             return ProcessStartResponse.error("Failed to start process: " + e.getMessage());
         }
@@ -101,11 +99,11 @@ public class ProcessController {
         
         try {
             // Update process record status to stopped
-            processRecordDAO.updateStatus(processRecordId, "STOPPED", null, Instant.now(), null);
+            processRecordDAO.updateStatus(processRecordId, "STOPPED", Instant.now(), null);
             
             logger.info("Process {} stopped successfully", processRecordId);
             
-            return ProcessStopResponse.success("Process stopped successfully", record.getCurrentProcessId());
+            return ProcessStopResponse.success("Process stopped successfully", processRecordId);
             
         } catch (Exception e) {
             logger.error("Failed to stop process: {}", processRecordId, e);
@@ -130,12 +128,12 @@ public class ProcessController {
         // Get active process details if running
         List<TaskData> tasks = null;
         
-        if (record.getCurrentProcessId() != null && record.isRunning()) {
+        if (record.isRunning()) {
             try {
-                // Try to get tasks from the orchestrator
-                tasks = processOrchestrator.getProcessTasks(record.getCurrentProcessId());
+                // Try to get tasks from the orchestrator (simplified - using process record ID)
+                tasks = processOrchestrator.getProcessTasks(processRecordId);
             } catch (Exception e) {
-                logger.warn("Could not retrieve task details for process: {}", record.getCurrentProcessId(), e);
+                logger.warn("Could not retrieve task details for process: {}", processRecordId, e);
             }
         }
         
@@ -194,7 +192,7 @@ public class ProcessController {
         ProcessExecutionHistory history = new ProcessExecutionHistory();
         history.setProcessDetailsId(processRecordId);
         history.setCurrentStatus(record.getCurrentStatus());
-        history.setCurrentProcessId(record.getCurrentProcessId());
+        history.setCurrentProcessId(processRecordId);
         history.setStartedWhen(record.getStartedWhen());
         history.setCompletedWhen(record.getCompletedWhen());
         history.setFailedWhen(record.getFailedWhen());

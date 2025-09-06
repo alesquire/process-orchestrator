@@ -6,8 +6,8 @@ import org.slf4j.LoggerFactory;
 import javax.sql.DataSource;
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -16,10 +16,10 @@ import java.util.stream.Collectors;
 /**
  * Centralized database initialization class.
  * Handles creation of all database tables and schema for the Process Orchestrator.
+ * All database schema is defined in SQL files and executed by this class.
  */
 public class DBInitializer {
     private static final Logger logger = LoggerFactory.getLogger(DBInitializer.class);
-
     private final DataSource dataSource;
 
     public DBInitializer(DataSource dataSource) {
@@ -27,11 +27,10 @@ public class DBInitializer {
     }
 
     /**
-     * Initialize the complete database schema.
-     * This method creates all required tables for the Process Orchestrator.
+     * Initialize the complete database schema by executing the SQL script from resources/schema.sql.
      */
     public void initializeDatabase() {
-        logger.info("Starting database schema initialization");
+        logger.info("Starting database schema initialization from schema.sql");
         
         try (Connection connection = dataSource.getConnection();
              Statement statement = connection.createStatement()) {
@@ -40,7 +39,7 @@ public class DBInitializer {
             String schemaSql = loadSchemaFromResource();
             executeSchemaScript(statement, schemaSql);
             
-            logger.info("Database schema initialization completed successfully");
+            logger.info("Database schema initialization completed successfully from schema.sql");
             
         } catch (SQLException | IOException e) {
             logger.error("Failed to initialize database schema", e);
@@ -49,210 +48,91 @@ public class DBInitializer {
     }
 
     /**
-     * Initialize only the essential tables for testing (including db-scheduler tables).
-     * This is useful for unit tests that need the full functionality.
-     */
-    public void initializeEssentialTables() {
-        logger.info("Starting essential tables initialization");
-        
-        try (Connection connection = dataSource.getConnection();
-             Statement statement = connection.createStatement()) {
-            
-            // Create the core process orchestrator tables
-            createProcessRecordTable(statement);
-            createProcessesTable(statement);
-            createTasksTable(statement);
-            createProcessExecutionsTable(statement);
-            
-            // Create scheduled_tasks table for db-scheduler (required for ProcessOrchestrator)
-            createScheduledTasksTable(statement);
-            
-            logger.info("Essential tables initialization completed successfully");
-            
-        } catch (SQLException e) {
-            logger.error("Failed to initialize essential tables", e);
-            throw new RuntimeException("Essential tables initialization failed", e);
-        }
-    }
-
-    /**
      * Load the schema SQL from the resources/schema.sql file
      */
     private String loadSchemaFromResource() throws IOException {
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(
-                    getClass().getClassLoader().getResourceAsStream("schema.sql"),
-                    StandardCharsets.UTF_8))) {
-            
+        try (InputStream is = getClass().getClassLoader().getResourceAsStream("schema.sql");
+             BufferedReader reader = new BufferedReader(new InputStreamReader(is))) {
             return reader.lines().collect(Collectors.joining("\n"));
         }
     }
 
     /**
-     * Execute the schema script, splitting by semicolons and executing each statement
+     * Execute the schema script, handling PostgreSQL functions and triggers properly.
+     * This method parses SQL statements more intelligently to handle dollar-quoted functions.
      */
     private void executeSchemaScript(Statement statement, String schemaSql) throws SQLException {
-        // Split by semicolon and execute each statement
-        String[] statements = schemaSql.split(";");
-        
+        // Parse SQL statements more intelligently to handle PostgreSQL functions
+        String[] statements = parseSqlStatements(schemaSql);
+
         for (String sql : statements) {
             sql = sql.trim();
-            if (!sql.isEmpty() && !sql.startsWith("--")) {
+            if (!sql.isEmpty() && !sql.startsWith("--")) { // Ignore empty lines and comments
                 try {
                     statement.execute(sql);
                     logger.debug("Executed SQL: {}", sql.substring(0, Math.min(sql.length(), 100)) + "...");
                 } catch (SQLException e) {
                     logger.warn("Failed to execute SQL statement: {}", sql.substring(0, Math.min(sql.length(), 100)) + "...", e);
-                    // Continue with other statements
+                    // Continue with other statements, but log the warning
                 }
             }
         }
     }
 
     /**
-     * Create the process_record table
+     * Parse SQL statements intelligently to handle PostgreSQL dollar-quoted functions.
+     * This method properly handles semicolons within function bodies.
      */
-    private void createProcessRecordTable(Statement statement) throws SQLException {
-        String sql = """
-            CREATE TABLE IF NOT EXISTS process_record (
-                id VARCHAR(255) PRIMARY KEY,
-                type VARCHAR(255) NOT NULL,
-                input_data TEXT NOT NULL,
-                schedule VARCHAR(255),
-                current_status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
-                current_process_id VARCHAR(255),
-                started_when TIMESTAMP WITH TIME ZONE,
-                completed_when TIMESTAMP WITH TIME ZONE,
-                failed_when TIMESTAMP WITH TIME ZONE,
-                stopped_when TIMESTAMP WITH TIME ZONE,
-                last_error_message TEXT,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-            )
-            """;
-        statement.execute(sql);
+    private String[] parseSqlStatements(String sql) {
+        java.util.List<String> statements = new java.util.ArrayList<>();
+        StringBuilder currentStatement = new StringBuilder();
+        boolean inDollarQuote = false;
+        String dollarTag = null;
         
-        // Create indexes
-        statement.execute("CREATE INDEX IF NOT EXISTS idx_process_record_status ON process_record (current_status)");
-        statement.execute("CREATE INDEX IF NOT EXISTS idx_process_record_type ON process_record (type)");
-        statement.execute("CREATE INDEX IF NOT EXISTS idx_process_record_schedule ON process_record (schedule)");
-        statement.execute("CREATE INDEX IF NOT EXISTS idx_process_record_created_at ON process_record (created_at)");
-    }
-
-    /**
-     * Create the processes table
-     */
-    private void createProcessesTable(Statement statement) throws SQLException {
-        String sql = """
-            CREATE TABLE IF NOT EXISTS processes (
-                id VARCHAR(255) PRIMARY KEY,
-                process_record_id VARCHAR(255) NOT NULL,
-                type VARCHAR(255) NOT NULL,
-                input_data TEXT NOT NULL,
-                status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
-                current_task_index INTEGER NOT NULL DEFAULT 0,
-                total_tasks INTEGER NOT NULL,
-                started_at TIMESTAMP WITH TIME ZONE,
-                completed_at TIMESTAMP WITH TIME ZONE,
-                error_message TEXT,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (process_record_id) REFERENCES process_record(id) ON DELETE CASCADE
-            )
-            """;
-        statement.execute(sql);
+        String[] lines = sql.split("\n");
         
-        // Create indexes
-        statement.execute("CREATE INDEX IF NOT EXISTS idx_processes_status ON processes (status)");
-        statement.execute("CREATE INDEX IF NOT EXISTS idx_processes_type ON processes (type)");
-        statement.execute("CREATE INDEX IF NOT EXISTS idx_processes_process_record_id ON processes (process_record_id)");
-        statement.execute("CREATE INDEX IF NOT EXISTS idx_processes_created_at ON processes (created_at)");
-    }
-
-    /**
-     * Create the tasks table
-     */
-    private void createTasksTable(Statement statement) throws SQLException {
-        String sql = """
-            CREATE TABLE IF NOT EXISTS tasks (
-                task_id VARCHAR(255) PRIMARY KEY,
-                process_id VARCHAR(255) NOT NULL,
-                task_index INTEGER NOT NULL,
-                name VARCHAR(255) NOT NULL,
-                command TEXT NOT NULL,
-                working_directory VARCHAR(500),
-                timeout_minutes INTEGER NOT NULL DEFAULT 60,
-                max_retries INTEGER NOT NULL DEFAULT 3,
-                retry_count INTEGER NOT NULL DEFAULT 0,
-                status VARCHAR(50) NOT NULL,
-                started_at TIMESTAMP WITH TIME ZONE,
-                completed_at TIMESTAMP WITH TIME ZONE,
-                error_message TEXT,
-                exit_code INTEGER,
-                output TEXT,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (process_id) REFERENCES processes(id) ON DELETE CASCADE
-            )
-            """;
-        statement.execute(sql);
+        for (String line : lines) {
+            line = line.trim();
+            if (line.isEmpty() || line.startsWith("--")) {
+                continue; // Skip empty lines and comments
+            }
+            
+            currentStatement.append(line).append("\n");
+            
+            // Check for dollar quote start/end
+            if (!inDollarQuote) {
+                // Look for dollar quote start: $$ or $tag$
+                java.util.regex.Pattern dollarStart = java.util.regex.Pattern.compile("\\$([^$]*)\\$");
+                java.util.regex.Matcher matcher = dollarStart.matcher(line);
+                if (matcher.find()) {
+                    inDollarQuote = true;
+                    dollarTag = matcher.group(1);
+                }
+            } else {
+                // Look for dollar quote end
+                if (line.contains("$" + dollarTag + "$")) {
+                    inDollarQuote = false;
+                    dollarTag = null;
+                }
+            }
+            
+            // If not in dollar quote and line ends with semicolon, it's a complete statement
+            if (!inDollarQuote && line.endsWith(";")) {
+                String statement = currentStatement.toString().trim();
+                if (!statement.isEmpty()) {
+                    statements.add(statement);
+                }
+                currentStatement = new StringBuilder();
+            }
+        }
         
-        // Create indexes
-        statement.execute("CREATE INDEX IF NOT EXISTS idx_tasks_process_id ON tasks (process_id)");
-        statement.execute("CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks (status)");
-        statement.execute("CREATE INDEX IF NOT EXISTS idx_tasks_task_index ON tasks (task_index)");
-    }
-
-    /**
-     * Create the process_executions table
-     */
-    private void createProcessExecutionsTable(Statement statement) throws SQLException {
-        String sql = """
-            CREATE TABLE IF NOT EXISTS process_executions (
-                execution_id VARCHAR(255) PRIMARY KEY,
-                process_id VARCHAR(255) NOT NULL,
-                execution_started_at TIMESTAMP WITH TIME ZONE NOT NULL,
-                execution_completed_at TIMESTAMP WITH TIME ZONE,
-                execution_status VARCHAR(50) NOT NULL,
-                triggered_by VARCHAR(50) NOT NULL,
-                error_message TEXT,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (process_id) REFERENCES processes(id) ON DELETE CASCADE
-            )
-            """;
-        statement.execute(sql);
+        // Add any remaining statement
+        String finalStatement = currentStatement.toString().trim();
+        if (!finalStatement.isEmpty()) {
+            statements.add(finalStatement);
+        }
         
-        // Create indexes
-        statement.execute("CREATE INDEX IF NOT EXISTS idx_executions_process_id ON process_executions (process_id)");
-        statement.execute("CREATE INDEX IF NOT EXISTS idx_executions_status ON process_executions (execution_status)");
-        statement.execute("CREATE INDEX IF NOT EXISTS idx_executions_started_at ON process_executions (execution_started_at)");
-    }
-
-    /**
-     * Create the scheduled_tasks table for db-scheduler
-     */
-    private void createScheduledTasksTable(Statement statement) throws SQLException {
-        String sql = """
-            CREATE TABLE IF NOT EXISTS scheduled_tasks (
-                task_name VARCHAR(255) NOT NULL,
-                task_instance VARCHAR(255) NOT NULL,
-                task_data BYTEA,
-                execution_time TIMESTAMP WITH TIME ZONE NOT NULL,
-                picked BOOLEAN NOT NULL DEFAULT FALSE,
-                picked_by VARCHAR(50),
-                last_success TIMESTAMP WITH TIME ZONE,
-                last_failure TIMESTAMP WITH TIME ZONE,
-                consecutive_failures INT,
-                last_heartbeat TIMESTAMP WITH TIME ZONE,
-                version BIGINT NOT NULL DEFAULT 0,
-                PRIMARY KEY (task_name, task_instance)
-            )
-            """;
-        statement.execute(sql);
-        
-        // Create indexes for db-scheduler performance
-        statement.execute("CREATE INDEX IF NOT EXISTS execution_time_idx ON scheduled_tasks (execution_time)");
-        statement.execute("CREATE INDEX IF NOT EXISTS last_heartbeat_idx ON scheduled_tasks (last_heartbeat)");
+        return statements.toArray(new String[0]);
     }
 
     /**
@@ -261,19 +141,19 @@ public class DBInitializer {
     public boolean isDatabaseInitialized() {
         try (Connection connection = dataSource.getConnection();
              Statement statement = connection.createStatement()) {
-            
-            // Check if key tables exist
+
+            // Check if key tables exist (simplified schema - 3 tables)
             var resultSet = statement.executeQuery(
-                "SELECT COUNT(*) FROM information_schema.tables WHERE table_name IN ('process_record', 'processes', 'tasks', 'scheduled_tasks')"
+                "SELECT COUNT(*) FROM information_schema.tables WHERE table_name IN ('process_record', 'tasks', 'scheduled_tasks')"
             );
-            
+
             if (resultSet.next()) {
                 int tableCount = resultSet.getInt(1);
-                return tableCount >= 4; // At least 4 key tables should exist
+                return tableCount >= 3; // At least 3 key tables should exist
             }
-            
+
             return false;
-            
+
         } catch (SQLException e) {
             logger.warn("Failed to check database initialization status", e);
             return false;
@@ -281,25 +161,59 @@ public class DBInitializer {
     }
 
     /**
-     * Clean up test data (useful for test isolation)
+     * Clean up test data by executing the cleanup.sql script
      */
     public void cleanupTestData() {
-        logger.info("Cleaning up test data");
-        
+        logger.info("Cleaning up test data using cleanup.sql");
         try (Connection connection = dataSource.getConnection();
              Statement statement = connection.createStatement()) {
             
-            // Delete test records (those starting with test-)
-            statement.executeUpdate("DELETE FROM process_record WHERE id LIKE 'test-%'");
-            statement.executeUpdate("DELETE FROM process_record WHERE id LIKE 'all-%'");
-            statement.executeUpdate("DELETE FROM process_record WHERE id LIKE 'status-test-%'");
-            statement.executeUpdate("DELETE FROM process_record WHERE id LIKE 'db-test-%'");
-            statement.executeUpdate("DELETE FROM process_record WHERE id LIKE 'crud-test-%'");
+            // Load and execute the cleanup script
+            String cleanupSql = loadCleanupScript();
+            executeSchemaScript(statement, cleanupSql);
             
             logger.info("Test data cleanup completed");
-            
-        } catch (SQLException e) {
+        } catch (SQLException | IOException e) {
             logger.warn("Failed to clean up test data", e);
+        }
+    }
+
+    /**
+     * Drop all tables by executing the drop-all-tables.sql script
+     */
+    public void dropAllTables() {
+        logger.info("Dropping all tables using drop-all-tables.sql");
+        try (Connection connection = dataSource.getConnection();
+             Statement statement = connection.createStatement()) {
+            
+            // Load and execute the drop tables script
+            String dropSql = loadDropTablesScript();
+            executeSchemaScript(statement, dropSql);
+            
+            logger.info("All tables dropped successfully");
+        } catch (SQLException | IOException e) {
+            logger.error("Failed to drop all tables", e);
+            throw new RuntimeException("Failed to drop all tables", e);
+        }
+    }
+
+    /**
+     * Load the cleanup SQL from the resources/cleanup.sql file
+     */
+    private String loadCleanupScript() throws IOException {
+        try (InputStream is = getClass().getClassLoader().getResourceAsStream("cleanup.sql");
+             BufferedReader reader = new BufferedReader(new InputStreamReader(is))) {
+            return reader.lines().collect(Collectors.joining("\n"));
+        }
+    }
+
+    /**
+     * Load the drop tables SQL from the resources/drop-all-tables.sql file
+     */
+    private String loadDropTablesScript() throws IOException {
+        try (InputStream is = getClass().getClassLoader().getResourceAsStream("drop-all-tables.sql");
+             BufferedReader reader = new BufferedReader(new InputStreamReader(is))) {
+            return reader.lines().collect(Collectors.joining("\n"));
         }
     }
 }

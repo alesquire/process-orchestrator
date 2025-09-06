@@ -70,7 +70,7 @@ public class ProcessRecordCRUDTest {
         
         // Initialize database schema using DBInitializer
         dbInitializer = new DBInitializer(dataSource);
-        dbInitializer.initializeEssentialTables();
+        dbInitializer.initializeDatabase();
         
         // Create services
         processRecordDAO = new ProcessRecordDAO(dataSource);
@@ -129,12 +129,14 @@ public class ProcessRecordCRUDTest {
                 assertTrue(columns.contains("input_data"), "INPUT_DATA column should exist");
                 assertTrue(columns.contains("schedule"), "SCHEDULE column should exist");
                 assertTrue(columns.contains("current_status"), "CURRENT_STATUS column should exist");
-                assertTrue(columns.contains("current_process_id"), "CURRENT_PROCESS_ID column should exist");
+                assertTrue(columns.contains("current_task_index"), "CURRENT_TASK_INDEX column should exist");
+                assertTrue(columns.contains("total_tasks"), "TOTAL_TASKS column should exist");
                 assertTrue(columns.contains("started_when"), "STARTED_WHEN column should exist");
                 assertTrue(columns.contains("completed_when"), "COMPLETED_WHEN column should exist");
                 assertTrue(columns.contains("failed_when"), "FAILED_WHEN column should exist");
                 assertTrue(columns.contains("stopped_when"), "STOPPED_WHEN column should exist");
                 assertTrue(columns.contains("last_error_message"), "LAST_ERROR_MESSAGE column should exist");
+                assertTrue(columns.contains("triggered_by"), "TRIGGERED_BY column should exist");
                 assertTrue(columns.contains("created_at"), "CREATED_AT column should exist");
                 assertTrue(columns.contains("updated_at"), "UPDATED_AT column should exist");
                 

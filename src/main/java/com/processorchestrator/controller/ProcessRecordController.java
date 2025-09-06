@@ -162,12 +162,14 @@ public class ProcessRecordController {
             ProcessDetails updatedDetails = new ProcessDetails(
                 updatedRecord,
                 existing.getCurrentStatus(),
-                existing.getCurrentProcessId(),
+                existing.getCurrentTaskIndex(),
+                existing.getTotalTasks(),
                 existing.getStartedWhen(),
                 existing.getCompletedWhen(),
                 existing.getFailedWhen(),
                 existing.getStoppedWhen(),
                 existing.getLastErrorMessage(),
+                existing.getTriggeredBy(),
                 existing.getCreatedAt(),
                 existing.getUpdatedAt()
             );

@@ -14,7 +14,7 @@ import java.util.Optional;
 
 /**
  * Data Access Object for ProcessRecord operations
- * Handles all database operations for process records
+ * Handles all database operations for process records with simplified schema
  */
 public class ProcessRecordDAO {
     private static final Logger logger = LoggerFactory.getLogger(ProcessRecordDAO.class);
@@ -29,8 +29,8 @@ public class ProcessRecordDAO {
      */
     public void create(ProcessRecord processRecord) {
         String sql = """
-            INSERT INTO process_record (id, type, input_data, schedule, current_status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO process_record (id, type, input_data, schedule, current_status, current_task_index, total_tasks, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
         
         try (Connection conn = dataSource.getConnection();
@@ -42,114 +42,55 @@ public class ProcessRecordDAO {
             stmt.setString(3, processRecord.getInputData());
             stmt.setString(4, processRecord.getSchedule());
             stmt.setString(5, "PENDING"); // Default status
-            stmt.setTimestamp(6, Timestamp.from(now));
-            stmt.setTimestamp(7, Timestamp.from(now));
+            stmt.setInt(6, 0); // Default task index
+            stmt.setInt(7, 0); // Default total tasks
+            stmt.setTimestamp(8, Timestamp.from(now));
+            stmt.setTimestamp(9, Timestamp.from(now));
             
             stmt.executeUpdate();
             logger.info("Created process record with ID: {}", processRecord.getId());
             
         } catch (SQLException e) {
-            logger.error("Error creating process record with ID: {}", processRecord.getId(), e);
+            logger.error("Failed to create process record: {}", processRecord.getId(), e);
             throw new RuntimeException("Failed to create process record", e);
         }
     }
 
     /**
-     * Find a process record by ID (returns ProcessDetails with all fields)
+     * Find a process record by ID
      */
     public Optional<ProcessDetails> findById(String id) {
-        String sql = "SELECT * FROM process_record WHERE id = ?";
+        String sql = """
+            SELECT id, type, input_data, schedule, current_status, current_task_index, total_tasks,
+                   started_when, completed_when, failed_when, stopped_when, last_error_message, triggered_by,
+                   created_at, updated_at
+            FROM process_record WHERE id = ?
+            """;
         
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setString(1, id);
-            ResultSet rs = stmt.executeQuery();
             
-            if (rs.next()) {
-                return Optional.of(mapRowToProcessDetails(rs));
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    ProcessDetails details = mapResultSetToProcessDetails(rs);
+                    logger.debug("Found process record: {}", id);
+                    return Optional.of(details);
+                } else {
+                    logger.debug("Process record not found: {}", id);
+                    return Optional.empty();
+                }
             }
             
         } catch (SQLException e) {
-            logger.error("Error retrieving process record with ID: {}", id, e);
-            throw new RuntimeException("Failed to retrieve process record", e);
+            logger.error("Failed to find process record: {}", id, e);
+            throw new RuntimeException("Failed to find process record", e);
         }
-        
-        return Optional.empty();
     }
 
     /**
-     * Find all process records (returns ProcessDetails with all fields)
-     */
-    public List<ProcessDetails> findAll() {
-        List<ProcessDetails> records = new ArrayList<>();
-        String sql = "SELECT * FROM process_record ORDER BY created_at DESC";
-        
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            
-            ResultSet rs = stmt.executeQuery();
-            while (rs.next()) {
-                records.add(mapRowToProcessDetails(rs));
-            }
-            
-        } catch (SQLException e) {
-            logger.error("Error retrieving all process records", e);
-            throw new RuntimeException("Failed to retrieve process records", e);
-        }
-        
-        return records;
-    }
-
-    /**
-     * Find process records by status (returns ProcessDetails with all fields)
-     */
-    public List<ProcessDetails> findByStatus(String status) {
-        List<ProcessDetails> records = new ArrayList<>();
-        String sql = "SELECT * FROM process_record WHERE current_status = ? ORDER BY created_at DESC";
-        
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            
-            stmt.setString(1, status);
-            ResultSet rs = stmt.executeQuery();
-            while (rs.next()) {
-                records.add(mapRowToProcessDetails(rs));
-            }
-            
-        } catch (SQLException e) {
-            logger.error("Error retrieving process records by status: {}", status, e);
-            throw new RuntimeException("Failed to retrieve process records by status", e);
-        }
-        
-        return records;
-    }
-
-    /**
-     * Find scheduled process records (returns ProcessDetails with all fields)
-     */
-    public List<ProcessDetails> findScheduled() {
-        List<ProcessDetails> records = new ArrayList<>();
-        String sql = "SELECT * FROM process_record WHERE schedule IS NOT NULL AND schedule != '' ORDER BY created_at DESC";
-        
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            
-            ResultSet rs = stmt.executeQuery();
-            while (rs.next()) {
-                records.add(mapRowToProcessDetails(rs));
-            }
-            
-        } catch (SQLException e) {
-            logger.error("Error retrieving scheduled process records", e);
-            throw new RuntimeException("Failed to retrieve scheduled process records", e);
-        }
-        
-        return records;
-    }
-
-    /**
-     * Update a process record (user-managed fields only)
+     * Update a process record
      */
     public void update(ProcessRecord processRecord) {
         String sql = """
@@ -167,95 +108,16 @@ public class ProcessRecordDAO {
             stmt.setTimestamp(4, Timestamp.from(Instant.now()));
             stmt.setString(5, processRecord.getId());
             
-            int rowsUpdated = stmt.executeUpdate();
-            if (rowsUpdated == 0) {
+            int rowsAffected = stmt.executeUpdate();
+            if (rowsAffected == 0) {
                 throw new RuntimeException("Process record not found: " + processRecord.getId());
             }
             
-            logger.info("Updated process record with ID: {}", processRecord.getId());
+            logger.info("Updated process record: {}", processRecord.getId());
             
         } catch (SQLException e) {
-            logger.error("Error updating process record with ID: {}", processRecord.getId(), e);
+            logger.error("Failed to update process record: {}", processRecord.getId(), e);
             throw new RuntimeException("Failed to update process record", e);
-        }
-    }
-
-    /**
-     * Update process record status and execution statistics
-     */
-    public void updateStatus(String id, String status, String currentProcessId) {
-        updateStatus(id, status, currentProcessId, null, null);
-    }
-
-    /**
-     * Update process record with execution statistics
-     */
-    public void updateStatus(String id, String status, String currentProcessId, 
-                           Instant executionTime, String errorMessage) {
-        String sql = """
-            UPDATE process_record 
-            SET current_status = ?, current_process_id = ?, updated_at = ?
-            """;
-        
-        // Add execution time fields based on status only if executionTime is provided
-        if (executionTime != null) {
-            switch (status.toUpperCase()) {
-                case "IN_PROGRESS":
-                    sql += ", started_when = ?";
-                    break;
-                case "COMPLETED":
-                    sql += ", completed_when = ?";
-                    break;
-                case "FAILED":
-                    sql += ", failed_when = ?, last_error_message = ?";
-                    break;
-                case "STOPPED":
-                    sql += ", stopped_when = ?";
-                    break;
-            }
-        }
-        
-        sql += " WHERE id = ?";
-        
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            
-            int paramIndex = 1;
-            stmt.setString(paramIndex++, status);
-            stmt.setString(paramIndex++, currentProcessId);
-            stmt.setTimestamp(paramIndex++, Timestamp.from(Instant.now()));
-            
-            // Add execution time based on status only if executionTime is provided
-            if (executionTime != null) {
-                switch (status.toUpperCase()) {
-                    case "IN_PROGRESS":
-                        stmt.setTimestamp(paramIndex++, Timestamp.from(executionTime));
-                        break;
-                    case "COMPLETED":
-                        stmt.setTimestamp(paramIndex++, Timestamp.from(executionTime));
-                        break;
-                    case "FAILED":
-                        stmt.setTimestamp(paramIndex++, Timestamp.from(executionTime));
-                        stmt.setString(paramIndex++, errorMessage);
-                        break;
-                    case "STOPPED":
-                        stmt.setTimestamp(paramIndex++, Timestamp.from(executionTime));
-                        break;
-                }
-            }
-            
-            stmt.setString(paramIndex, id);
-            
-            int rowsUpdated = stmt.executeUpdate();
-            if (rowsUpdated == 0) {
-                throw new RuntimeException("Process record not found: " + id);
-            }
-            
-            logger.info("Updated process record {} status to {}", id, status);
-            
-        } catch (SQLException e) {
-            logger.error("Error updating process record status for ID: {}", id, e);
-            throw new RuntimeException("Failed to update process record status", e);
         }
     }
 
@@ -269,18 +131,217 @@ public class ProcessRecordDAO {
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setString(1, id);
-            int rowsDeleted = stmt.executeUpdate();
             
-            if (rowsDeleted == 0) {
+            int rowsAffected = stmt.executeUpdate();
+            if (rowsAffected == 0) {
                 throw new RuntimeException("Process record not found: " + id);
             }
             
-            logger.info("Deleted process record with ID: {}", id);
+            logger.info("Deleted process record: {}", id);
             
         } catch (SQLException e) {
-            logger.error("Error deleting process record with ID: {}", id, e);
+            logger.error("Failed to delete process record: {}", id, e);
             throw new RuntimeException("Failed to delete process record", e);
         }
+    }
+
+    /**
+     * Find all process records
+     */
+    public List<ProcessDetails> findAll() {
+        String sql = """
+            SELECT id, type, input_data, schedule, current_status, current_task_index, total_tasks,
+                   started_when, completed_when, failed_when, stopped_when, last_error_message, triggered_by,
+                   created_at, updated_at
+            FROM process_record ORDER BY created_at DESC
+            """;
+        
+        return executeQuery(sql);
+    }
+
+    /**
+     * Find process records by status
+     */
+    public List<ProcessDetails> findByStatus(String status) {
+        String sql = """
+            SELECT id, type, input_data, schedule, current_status, current_task_index, total_tasks,
+                   started_when, completed_when, failed_when, stopped_when, last_error_message, triggered_by,
+                   created_at, updated_at
+            FROM process_record WHERE current_status = ? ORDER BY created_at DESC
+            """;
+        
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setString(1, status);
+            return executeQuery(stmt);
+            
+        } catch (SQLException e) {
+            logger.error("Failed to find process records by status: {}", status, e);
+            throw new RuntimeException("Failed to find process records by status", e);
+        }
+    }
+
+    /**
+     * Find scheduled process records (non-null schedule)
+     */
+    public List<ProcessDetails> findScheduled() {
+        String sql = """
+            SELECT id, type, input_data, schedule, current_status, current_task_index, total_tasks,
+                   started_when, completed_when, failed_when, stopped_when, last_error_message, triggered_by,
+                   created_at, updated_at
+            FROM process_record WHERE schedule IS NOT NULL ORDER BY created_at DESC
+            """;
+        
+        return executeQuery(sql);
+    }
+
+    /**
+     * Update process status and execution details
+     */
+    public void updateStatus(String id, String status, Instant executionTime, String errorMessage) {
+        StringBuilder sql = new StringBuilder("UPDATE process_record SET current_status = ?, updated_at = ?");
+        List<Object> params = new ArrayList<>();
+        params.add(status);
+        params.add(Timestamp.from(Instant.now()));
+        
+        // Add execution time fields based on status
+        switch (status.toUpperCase()) {
+            case "IN_PROGRESS":
+                sql.append(", started_when = ?");
+                params.add(Timestamp.from(executionTime));
+                break;
+            case "COMPLETED":
+                sql.append(", completed_when = ?");
+                params.add(Timestamp.from(executionTime));
+                break;
+            case "FAILED":
+                sql.append(", failed_when = ?");
+                params.add(Timestamp.from(executionTime));
+                if (errorMessage != null) {
+                    sql.append(", last_error_message = ?");
+                    params.add(errorMessage);
+                }
+                break;
+            case "STOPPED":
+                sql.append(", stopped_when = ?");
+                params.add(Timestamp.from(executionTime));
+                break;
+        }
+        
+        sql.append(" WHERE id = ?");
+        params.add(id);
+        
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql.toString())) {
+            
+            for (int i = 0; i < params.size(); i++) {
+                stmt.setObject(i + 1, params.get(i));
+            }
+            
+            int rowsAffected = stmt.executeUpdate();
+            if (rowsAffected == 0) {
+                throw new RuntimeException("Process record not found: " + id);
+            }
+            
+            logger.info("Updated process record status: {} -> {}", id, status);
+            
+        } catch (SQLException e) {
+            logger.error("Failed to update process record status: {}", id, e);
+            throw new RuntimeException("Failed to update process record status", e);
+        }
+    }
+
+    /**
+     * Update task progress
+     */
+    public void updateTaskProgress(String id, Integer currentTaskIndex, Integer totalTasks) {
+        String sql = """
+            UPDATE process_record 
+            SET current_task_index = ?, total_tasks = ?, updated_at = ?
+            WHERE id = ?
+            """;
+        
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setInt(1, currentTaskIndex);
+            stmt.setInt(2, totalTasks);
+            stmt.setTimestamp(3, Timestamp.from(Instant.now()));
+            stmt.setString(4, id);
+            
+            int rowsAffected = stmt.executeUpdate();
+            if (rowsAffected == 0) {
+                throw new RuntimeException("Process record not found: " + id);
+            }
+            
+            logger.debug("Updated task progress for process record: {} -> {}/{}", id, currentTaskIndex, totalTasks);
+            
+        } catch (SQLException e) {
+            logger.error("Failed to update task progress: {}", id, e);
+            throw new RuntimeException("Failed to update task progress", e);
+        }
+    }
+
+    /**
+     * Update triggered by information
+     */
+    public void updateTriggeredBy(String id, String triggeredBy) {
+        String sql = """
+            UPDATE process_record 
+            SET triggered_by = ?, updated_at = ?
+            WHERE id = ?
+            """;
+        
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setString(1, triggeredBy);
+            stmt.setTimestamp(2, Timestamp.from(Instant.now()));
+            stmt.setString(3, id);
+            
+            int rowsAffected = stmt.executeUpdate();
+            if (rowsAffected == 0) {
+                throw new RuntimeException("Process record not found: " + id);
+            }
+            
+            logger.debug("Updated triggered_by for process record: {} -> {}", id, triggeredBy);
+            
+        } catch (SQLException e) {
+            logger.error("Failed to update triggered_by: {}", id, e);
+            throw new RuntimeException("Failed to update triggered_by", e);
+        }
+    }
+
+    /**
+     * Execute a query and return list of ProcessDetails
+     */
+    private List<ProcessDetails> executeQuery(String sql) {
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            return executeQuery(stmt);
+            
+        } catch (SQLException e) {
+            logger.error("Failed to execute query", e);
+            throw new RuntimeException("Failed to execute query", e);
+        }
+    }
+
+    /**
+     * Execute a prepared statement and return list of ProcessDetails
+     */
+    private List<ProcessDetails> executeQuery(PreparedStatement stmt) throws SQLException {
+        List<ProcessDetails> results = new ArrayList<>();
+        
+        try (ResultSet rs = stmt.executeQuery()) {
+            while (rs.next()) {
+                ProcessDetails details = mapResultSetToProcessDetails(rs);
+                results.add(details);
+            }
+        }
+        
+        return results;
     }
 
     /**
@@ -293,18 +354,18 @@ public class ProcessRecordDAO {
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setString(1, id);
-            ResultSet rs = stmt.executeQuery();
             
-            if (rs.next()) {
-                return rs.getInt(1) > 0;
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1) > 0;
+                }
+                return false;
             }
             
         } catch (SQLException e) {
-            logger.error("Error checking if process record exists with ID: {}", id, e);
+            logger.error("Failed to check if process record exists: {}", id, e);
             throw new RuntimeException("Failed to check if process record exists", e);
         }
-        
-        return false;
     }
 
     /**
@@ -317,25 +378,24 @@ public class ProcessRecordDAO {
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setString(1, status);
-            ResultSet rs = stmt.executeQuery();
             
-            if (rs.next()) {
-                return rs.getLong(1);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getLong(1);
+                }
+                return 0;
             }
             
         } catch (SQLException e) {
-            logger.error("Error counting process records by status: {}", status, e);
+            logger.error("Failed to count process records by status: {}", status, e);
             throw new RuntimeException("Failed to count process records by status", e);
         }
-        
-        return 0;
     }
 
     /**
-     * Map database row to ProcessDetails object
+     * Map a ResultSet to ProcessDetails object
      */
-    private ProcessDetails mapRowToProcessDetails(ResultSet rs) throws SQLException {
-        // Create base ProcessRecord
+    private ProcessDetails mapResultSetToProcessDetails(ResultSet rs) throws SQLException {
         ProcessRecord record = new ProcessRecord(
             rs.getString("id"),
             rs.getString("type"),
@@ -343,18 +403,19 @@ public class ProcessRecordDAO {
             rs.getString("schedule")
         );
         
-        // Create ProcessDetails with engine-managed fields
         return new ProcessDetails(
             record,
             rs.getString("current_status"),
-            rs.getString("current_process_id"),
-            Optional.ofNullable(rs.getTimestamp("started_when")).map(Timestamp::toInstant).orElse(null),
-            Optional.ofNullable(rs.getTimestamp("completed_when")).map(Timestamp::toInstant).orElse(null),
-            Optional.ofNullable(rs.getTimestamp("failed_when")).map(Timestamp::toInstant).orElse(null),
-            Optional.ofNullable(rs.getTimestamp("stopped_when")).map(Timestamp::toInstant).orElse(null),
+            rs.getInt("current_task_index"),
+            rs.getInt("total_tasks"),
+            rs.getTimestamp("started_when") != null ? rs.getTimestamp("started_when").toInstant() : null,
+            rs.getTimestamp("completed_when") != null ? rs.getTimestamp("completed_when").toInstant() : null,
+            rs.getTimestamp("failed_when") != null ? rs.getTimestamp("failed_when").toInstant() : null,
+            rs.getTimestamp("stopped_when") != null ? rs.getTimestamp("stopped_when").toInstant() : null,
             rs.getString("last_error_message"),
-            Optional.ofNullable(rs.getTimestamp("created_at")).map(Timestamp::toInstant).orElse(null),
-            Optional.ofNullable(rs.getTimestamp("updated_at")).map(Timestamp::toInstant).orElse(null)
+            rs.getString("triggered_by"),
+            rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toInstant() : null,
+            rs.getTimestamp("updated_at") != null ? rs.getTimestamp("updated_at").toInstant() : null
         );
     }
 }

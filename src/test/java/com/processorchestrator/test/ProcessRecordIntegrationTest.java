@@ -9,7 +9,6 @@ import com.processorchestrator.dao.ProcessRecordDAO;
 import com.processorchestrator.database.DBInitializer;
 import com.processorchestrator.model.ProcessDetails;
 import com.processorchestrator.service.ProcessOrchestrator;
-import com.processorchestrator.service.ProcessResultService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -83,14 +82,13 @@ public class ProcessRecordIntegrationTest {
         DBInitializer dbInitializer = new DBInitializer(dataSource);
         dbInitializer.initializeDatabase();
         
-        // Create services
-        ProcessTypeRegistry registry = createProcessTypeRegistry();
-        processOrchestrator = new ProcessOrchestrator(dataSource, registry);
-        ProcessResultService resultService = new ProcessResultService(dataSource);
-        
-        processRecordDAO = new ProcessRecordDAO(dataSource);
-        processRecordController = new ProcessRecordController(processRecordDAO);
-        processController = new ProcessController(processRecordDAO, processOrchestrator, resultService);
+            // Create services
+            ProcessTypeRegistry registry = createProcessTypeRegistry();
+            processOrchestrator = new ProcessOrchestrator(dataSource, registry);
+
+            processRecordDAO = new ProcessRecordDAO(dataSource);
+            processRecordController = new ProcessRecordController(processRecordDAO);
+            processController = new ProcessController(processRecordDAO, processOrchestrator);
     }
 
     private ProcessTypeRegistry createProcessTypeRegistry() {
