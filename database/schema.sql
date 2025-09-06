@@ -1,12 +1,41 @@
 -- Database schema for Process Orchestrator
 -- This script creates the necessary tables for process management
 
--- Processes table - stores process definitions and execution state
-CREATE TABLE IF NOT EXISTS processes (
+-- Process Definitions table - stores process templates and execution history (user-managed)
+CREATE TABLE IF NOT EXISTS process_definitions (
     id VARCHAR(255) PRIMARY KEY,
     type VARCHAR(255) NOT NULL,
     input_data TEXT NOT NULL,
     schedule VARCHAR(255), -- Cron expression, NULL for manual execution only
+    
+    -- Current execution status (updated by engine)
+    current_status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
+    current_process_id VARCHAR(255), -- Reference to active process in processes table
+    
+    -- Execution statistics (updated by engine)
+    started_when TIMESTAMP,
+    completed_when TIMESTAMP,
+    failed_when TIMESTAMP,
+    stopped_when TIMESTAMP,
+    last_error_message TEXT,
+    
+    -- Metadata
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Indexes for performance
+    INDEX idx_process_definitions_status (current_status),
+    INDEX idx_process_definitions_type (type),
+    INDEX idx_process_definitions_schedule (schedule),
+    INDEX idx_process_definitions_created_at (created_at)
+);
+
+-- Processes table - stores active process execution state (engine-managed)
+CREATE TABLE IF NOT EXISTS processes (
+    id VARCHAR(255) PRIMARY KEY,
+    definition_id VARCHAR(255) NOT NULL, -- Reference to process_definitions
+    type VARCHAR(255) NOT NULL,
+    input_data TEXT NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
     current_task_index INTEGER NOT NULL DEFAULT 0,
     total_tasks INTEGER NOT NULL,
@@ -16,10 +45,13 @@ CREATE TABLE IF NOT EXISTS processes (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
+    -- Foreign key constraint
+    FOREIGN KEY (definition_id) REFERENCES process_definitions(id) ON DELETE CASCADE,
+    
     -- Indexes for performance
     INDEX idx_processes_status (status),
     INDEX idx_processes_type (type),
-    INDEX idx_processes_schedule (schedule),
+    INDEX idx_processes_definition_id (definition_id),
     INDEX idx_processes_created_at (created_at)
 );
 

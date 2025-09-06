@@ -11,11 +11,14 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 /**
  * Controller for managing processes via API calls
+ * 
+ * Works with the new table structure:
+ * - Process Definitions: User-managed templates with execution history
+ * - Active Processes: Engine-managed execution instances
  */
 public class ProcessController {
     private static final Logger logger = LoggerFactory.getLogger(ProcessController.class);
@@ -30,174 +33,201 @@ public class ProcessController {
         this.resultService = resultService;
     }
 
+    // ==================== PROCESS DEFINITION MANAGEMENT ====================
+
     /**
-     * Create a new process definition
+     * Create a new process definition (user-managed)
      */
-    public ProcessManager.ProcessRecord createProcess(String id, String type, String inputData, String schedule) {
-        logger.info("Creating process: id={}, type={}, schedule={}", id, type, schedule);
+    public ProcessManager.ProcessDefinition createProcessDefinition(String id, String type, String inputData, String schedule) {
+        logger.info("Creating process definition: id={}, type={}, schedule={}", id, type, schedule);
         
-        // Validate that process doesn't already exist
-        if (processManager.getProcess(id).isPresent()) {
-            throw new IllegalArgumentException("Process with ID " + id + " already exists");
+        // Validate that process definition doesn't already exist
+        if (processManager.getProcessDefinition(id).isPresent()) {
+            throw new IllegalArgumentException("Process definition with ID " + id + " already exists");
         }
         
-        // Create the process record
-        processManager.createProcess(id, type, inputData, schedule);
+        // Create the process definition
+        processManager.createProcessDefinition(id, type, inputData, schedule);
         
-        // Return the created process
-        return processManager.getProcess(id).orElseThrow(() -> 
-            new RuntimeException("Failed to retrieve created process"));
+        // Return the created process definition
+        return processManager.getProcessDefinition(id).orElseThrow(() -> 
+            new RuntimeException("Failed to retrieve created process definition"));
     }
 
     /**
-     * Start a process by ID
+     * Get a process definition by ID
      */
-    public ProcessStartResponse startProcess(String id) {
-        logger.info("Starting process: {}", id);
+    public ProcessManager.ProcessDefinition getProcessDefinition(String id) {
+        logger.info("Getting process definition: {}", id);
         
-        // Get the process record
-        ProcessManager.ProcessRecord processRecord = processManager.getProcess(id)
-            .orElseThrow(() -> new IllegalArgumentException("Process not found: " + id));
+        return processManager.getProcessDefinition(id)
+            .orElseThrow(() -> new IllegalArgumentException("Process definition not found: " + id));
+    }
+
+    /**
+     * Get all process definitions
+     */
+    public List<ProcessManager.ProcessDefinition> getAllProcessDefinitions() {
+        logger.info("Getting all process definitions");
+        return processManager.getAllProcessDefinitions();
+    }
+
+    /**
+     * Get process definitions by status
+     */
+    public List<ProcessManager.ProcessDefinition> getProcessDefinitionsByStatus(String status) {
+        logger.info("Getting process definitions by status: {}", status);
+        return processManager.getProcessDefinitionsByStatus(status);
+    }
+
+    /**
+     * Get scheduled process definitions
+     */
+    public List<ProcessManager.ProcessDefinition> getScheduledProcessDefinitions() {
+        logger.info("Getting scheduled process definitions");
+        return processManager.getScheduledProcessDefinitions();
+    }
+
+    /**
+     * Delete a process definition (manual deletion only)
+     */
+    public ProcessDeleteResponse deleteProcessDefinition(String id) {
+        logger.info("Deleting process definition: {}", id);
+        
+        try {
+            processManager.deleteProcessDefinition(id);
+            return new ProcessDeleteResponse(true, "Process definition deleted successfully");
+        } catch (Exception e) {
+            logger.error("Failed to delete process definition: {}", id, e);
+            return new ProcessDeleteResponse(false, "Failed to delete process definition: " + e.getMessage());
+        }
+    }
+
+    // ==================== PROCESS EXECUTION MANAGEMENT ====================
+
+    /**
+     * Start a process by definition ID
+     */
+    public ProcessStartResponse startProcess(String definitionId) {
+        logger.info("Starting process for definition: {}", definitionId);
+        
+        // Get the process definition
+        ProcessManager.ProcessDefinition definition = processManager.getProcessDefinition(definitionId)
+            .orElseThrow(() -> new IllegalArgumentException("Process definition not found: " + definitionId));
         
         // Check if process can be started
-        if ("IN_PROGRESS".equals(processRecord.getStatus())) {
-            throw new IllegalStateException("Process is already running: " + id);
+        if ("IN_PROGRESS".equals(definition.getCurrentStatus())) {
+            throw new IllegalStateException("Process is already running: " + definitionId);
         }
         
-        if ("COMPLETED".equals(processRecord.getStatus())) {
-            logger.info("Restarting completed process: {}", id);
+        if ("COMPLETED".equals(definition.getCurrentStatus())) {
+            logger.info("Restarting completed process definition: {}", definitionId);
         }
         
         try {
             // Parse input data
-            ProcessInputData inputData = parseInputData(processRecord.getInputData());
+            ProcessInputData inputData = parseInputData(definition.getInputData());
             
-            // Generate execution ID for tracking
-            String executionId = UUID.randomUUID().toString();
+            // Generate unique process ID for this execution
+            String processId = generateProcessId(definitionId);
             
-            // Record execution start
-            processManager.recordExecution(executionId, id, "MANUAL", Instant.now(), null, "STARTED", null);
+            // Create active process instance
+            processManager.createActiveProcess(processId, definitionId, definition.getType(), definition.getInputData());
             
-            // Update process status
-            processManager.updateProcessStatus(id, "IN_PROGRESS");
+            // Update process definition status
+            processManager.updateProcessDefinitionStatus(definitionId, "IN_PROGRESS", processId, Instant.now(), null);
             
             // Start the process using the orchestrator
-            String orchestratorProcessId = processOrchestrator.startProcess(processRecord.getType(), inputData);
+            String orchestratorProcessId = processOrchestrator.startProcess(definition.getType(), inputData);
             
-            // Update process with orchestrator details
-            processManager.updateProcessExecution(id, 0, 0, Instant.now(), null);
+            // Update active process with orchestrator details
+            processManager.updateActiveProcessExecution(processId, 0, 0, Instant.now(), null);
             
-            logger.info("Process {} started successfully with orchestrator ID: {}", id, orchestratorProcessId);
+            logger.info("Process {} started successfully with orchestrator ID: {}", definitionId, orchestratorProcessId);
             
-            return new ProcessStartResponse(true, "Process started successfully", executionId, orchestratorProcessId);
+            return new ProcessStartResponse(true, "Process started successfully", processId, orchestratorProcessId);
             
         } catch (Exception e) {
-            logger.error("Failed to start process: {}", id, e);
+            logger.error("Failed to start process: {}", definitionId, e);
             
-            // Update process status to failed
-            processManager.updateProcessStatus(id, "FAILED", e.getMessage());
+            // Update process definition status to failed
+            processManager.updateProcessDefinitionStatus(definitionId, "FAILED", null, Instant.now(), e.getMessage());
             
-            // Record failed execution
-            String executionId = UUID.randomUUID().toString();
-            processManager.recordExecution(executionId, id, "MANUAL", Instant.now(), Instant.now(), "FAILED", e.getMessage());
-            
-            return new ProcessStartResponse(false, "Failed to start process: " + e.getMessage(), executionId, null);
+            return new ProcessStartResponse(false, "Failed to start process: " + e.getMessage(), null, null);
         }
     }
 
     /**
-     * Stop a process by ID
+     * Stop a process by definition ID
      */
-    public ProcessStopResponse stopProcess(String id) {
-        logger.info("Stopping process: {}", id);
+    public ProcessStopResponse stopProcess(String definitionId) {
+        logger.info("Stopping process for definition: {}", definitionId);
         
-        // Get the process record
-        ProcessManager.ProcessRecord processRecord = processManager.getProcess(id)
-            .orElseThrow(() -> new IllegalArgumentException("Process not found: " + id));
+        // Get the process definition
+        ProcessManager.ProcessDefinition definition = processManager.getProcessDefinition(definitionId)
+            .orElseThrow(() -> new IllegalArgumentException("Process definition not found: " + definitionId));
         
         // Check if process can be stopped
-        if (!"IN_PROGRESS".equals(processRecord.getStatus())) {
-            throw new IllegalStateException("Process is not running: " + id);
+        if (!"IN_PROGRESS".equals(definition.getCurrentStatus())) {
+            throw new IllegalStateException("Process is not running: " + definitionId);
         }
         
         try {
-            // Update process status to stopped
-            processManager.updateProcessStatus(id, "STOPPED");
-            processManager.updateProcessExecution(id, processRecord.getCurrentTaskIndex(), 
-                                                processRecord.getTotalTasks(), 
-                                                processRecord.getStartedAt(), Instant.now());
+            // Update process definition status to stopped
+            processManager.updateProcessDefinitionStatus(definitionId, "STOPPED", null, Instant.now(), null);
             
-            // Record execution stop
-            String executionId = UUID.randomUUID().toString();
-            processManager.recordExecution(executionId, id, "MANUAL", 
-                                         processRecord.getStartedAt(), Instant.now(), "STOPPED", null);
+            // Update active process if it exists
+            if (definition.getCurrentProcessId() != null) {
+                processManager.updateActiveProcessStatus(definition.getCurrentProcessId(), "STOPPED");
+            }
             
-            logger.info("Process {} stopped successfully", id);
+            logger.info("Process {} stopped successfully", definitionId);
             
-            return new ProcessStopResponse(true, "Process stopped successfully", executionId);
+            return new ProcessStopResponse(true, "Process stopped successfully", definition.getCurrentProcessId());
             
         } catch (Exception e) {
-            logger.error("Failed to stop process: {}", id, e);
+            logger.error("Failed to stop process: {}", definitionId, e);
             return new ProcessStopResponse(false, "Failed to stop process: " + e.getMessage(), null);
         }
     }
 
     /**
-     * Get process state by ID
+     * Get process state by definition ID
      */
-    public ProcessStateResponse getProcessState(String id) {
-        logger.info("Getting process state: {}", id);
+    public ProcessStateResponse getProcessState(String definitionId) {
+        logger.info("Getting process state for definition: {}", definitionId);
         
-        // Get the process record
-        ProcessManager.ProcessRecord processRecord = processManager.getProcess(id)
-            .orElseThrow(() -> new IllegalArgumentException("Process not found: " + id));
+        // Get the process definition
+        ProcessManager.ProcessDefinition definition = processManager.getProcessDefinition(definitionId)
+            .orElseThrow(() -> new IllegalArgumentException("Process definition not found: " + definitionId));
         
-        // Get execution history
-        List<ProcessManager.ExecutionRecord> executionHistory = processManager.getExecutionHistory(id);
-        
-        // Get task details if process is running
+        // Get active process details if running
+        ProcessManager.ActiveProcess activeProcess = null;
         List<TaskData> tasks = null;
-        if ("IN_PROGRESS".equals(processRecord.getStatus())) {
-            try {
-                // Try to get tasks from the orchestrator
-                tasks = processOrchestrator.getProcessTasks(id);
-            } catch (Exception e) {
-                logger.warn("Could not retrieve task details for process: {}", id, e);
+        
+        if (definition.getCurrentProcessId() != null) {
+            activeProcess = processManager.getActiveProcess(definition.getCurrentProcessId()).orElse(null);
+            
+            if (activeProcess != null && "IN_PROGRESS".equals(activeProcess.getStatus())) {
+                try {
+                    // Try to get tasks from the orchestrator
+                    tasks = processOrchestrator.getProcessTasks(definition.getCurrentProcessId());
+                } catch (Exception e) {
+                    logger.warn("Could not retrieve task details for process: {}", definition.getCurrentProcessId(), e);
+                }
             }
         }
         
-        return new ProcessStateResponse(processRecord, executionHistory, tasks);
+        return new ProcessStateResponse(definition, activeProcess, tasks);
     }
 
-    /**
-     * Get all processes
-     */
-    public List<ProcessManager.ProcessRecord> getAllProcesses() {
-        logger.info("Getting all processes");
-        return processManager.getAllProcesses();
-    }
+    // ==================== HELPER METHODS ====================
 
     /**
-     * Get processes by status
+     * Generate a unique process ID for execution
      */
-    public List<ProcessManager.ProcessRecord> getProcessesByStatus(String status) {
-        logger.info("Getting processes by status: {}", status);
-        return processManager.getProcessesByStatus(status);
-    }
-
-    /**
-     * Delete a process (only if not completed)
-     */
-    public ProcessDeleteResponse deleteProcess(String id) {
-        logger.info("Deleting process: {}", id);
-        
-        try {
-            processManager.deleteProcess(id);
-            return new ProcessDeleteResponse(true, "Process deleted successfully");
-        } catch (Exception e) {
-            logger.error("Failed to delete process: {}", id, e);
-            return new ProcessDeleteResponse(false, "Failed to delete process: " + e.getMessage());
-        }
+    private String generateProcessId(String definitionId) {
+        return definitionId + "-" + System.currentTimeMillis() + "-" + UUID.randomUUID().toString().substring(0, 8);
     }
 
     /**
@@ -246,57 +276,58 @@ public class ProcessController {
         }
     }
 
-    // Response classes
+    // ==================== RESPONSE CLASSES ====================
+
     public static class ProcessStartResponse {
         private final boolean success;
         private final String message;
-        private final String executionId;
+        private final String processId;
         private final String orchestratorProcessId;
 
-        public ProcessStartResponse(boolean success, String message, String executionId, String orchestratorProcessId) {
+        public ProcessStartResponse(boolean success, String message, String processId, String orchestratorProcessId) {
             this.success = success;
             this.message = message;
-            this.executionId = executionId;
+            this.processId = processId;
             this.orchestratorProcessId = orchestratorProcessId;
         }
 
         public boolean isSuccess() { return success; }
         public String getMessage() { return message; }
-        public String getExecutionId() { return executionId; }
+        public String getProcessId() { return processId; }
         public String getOrchestratorProcessId() { return orchestratorProcessId; }
     }
 
     public static class ProcessStopResponse {
         private final boolean success;
         private final String message;
-        private final String executionId;
+        private final String processId;
 
-        public ProcessStopResponse(boolean success, String message, String executionId) {
+        public ProcessStopResponse(boolean success, String message, String processId) {
             this.success = success;
             this.message = message;
-            this.executionId = executionId;
+            this.processId = processId;
         }
 
         public boolean isSuccess() { return success; }
         public String getMessage() { return message; }
-        public String getExecutionId() { return executionId; }
+        public String getProcessId() { return processId; }
     }
 
     public static class ProcessStateResponse {
-        private final ProcessManager.ProcessRecord processRecord;
-        private final List<ProcessManager.ExecutionRecord> executionHistory;
+        private final ProcessManager.ProcessDefinition definition;
+        private final ProcessManager.ActiveProcess activeProcess;
         private final List<TaskData> tasks;
 
-        public ProcessStateResponse(ProcessManager.ProcessRecord processRecord, 
-                                  List<ProcessManager.ExecutionRecord> executionHistory, 
+        public ProcessStateResponse(ProcessManager.ProcessDefinition definition, 
+                                  ProcessManager.ActiveProcess activeProcess, 
                                   List<TaskData> tasks) {
-            this.processRecord = processRecord;
-            this.executionHistory = executionHistory;
+            this.definition = definition;
+            this.activeProcess = activeProcess;
             this.tasks = tasks;
         }
 
-        public ProcessManager.ProcessRecord getProcessRecord() { return processRecord; }
-        public List<ProcessManager.ExecutionRecord> getExecutionHistory() { return executionHistory; }
+        public ProcessManager.ProcessDefinition getDefinition() { return definition; }
+        public ProcessManager.ActiveProcess getActiveProcess() { return activeProcess; }
         public List<TaskData> getTasks() { return tasks; }
     }
 

@@ -96,11 +96,28 @@ public class CompleteDatabaseExample {
             // Create all necessary tables
             String[] createStatements = {
                 """
-                CREATE TABLE IF NOT EXISTS processes (
+                CREATE TABLE IF NOT EXISTS process_definitions (
                     id VARCHAR(255) PRIMARY KEY,
                     type VARCHAR(255) NOT NULL,
                     input_data TEXT NOT NULL,
                     schedule VARCHAR(255),
+                    current_status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
+                    current_process_id VARCHAR(255),
+                    started_when TIMESTAMP,
+                    completed_when TIMESTAMP,
+                    failed_when TIMESTAMP,
+                    stopped_when TIMESTAMP,
+                    last_error_message TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """,
+                """
+                CREATE TABLE IF NOT EXISTS processes (
+                    id VARCHAR(255) PRIMARY KEY,
+                    definition_id VARCHAR(255) NOT NULL,
+                    type VARCHAR(255) NOT NULL,
+                    input_data TEXT NOT NULL,
                     status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
                     current_task_index INTEGER NOT NULL DEFAULT 0,
                     total_tasks INTEGER NOT NULL,
@@ -108,7 +125,8 @@ public class CompleteDatabaseExample {
                     completed_at TIMESTAMP,
                     error_message TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (definition_id) REFERENCES process_definitions(id) ON DELETE CASCADE
                 )
                 """,
                 """
@@ -130,19 +148,6 @@ public class CompleteDatabaseExample {
                     output TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (process_id) REFERENCES processes(id) ON DELETE CASCADE
-                )
-                """,
-                """
-                CREATE TABLE IF NOT EXISTS process_executions (
-                    execution_id VARCHAR(255) PRIMARY KEY,
-                    process_id VARCHAR(255) NOT NULL,
-                    execution_started_at TIMESTAMP NOT NULL,
-                    execution_completed_at TIMESTAMP,
-                    execution_status VARCHAR(50) NOT NULL,
-                    triggered_by VARCHAR(50) NOT NULL,
-                    error_message TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (process_id) REFERENCES processes(id) ON DELETE CASCADE
                 )
                 """
@@ -195,8 +200,8 @@ public class CompleteDatabaseExample {
     private static void demonstrateProcessManagement(ProcessApiService apiService) {
         logger.info("\n=== Example 1: Process Management ===");
         
-        // Create multiple processes
-        String[] processIds = {
+        // Create multiple process definitions
+        String[] definitionIds = {
             "daily-report-process",
             "weekly-backup-process", 
             "monthly-cleanup-process"
@@ -208,31 +213,31 @@ public class CompleteDatabaseExample {
             "0 1 1 * *"     // Monthly on 1st at 1 AM
         };
         
-        for (int i = 0; i < processIds.length; i++) {
-            String processId = processIds[i];
+        for (int i = 0; i < definitionIds.length; i++) {
+            String definitionId = definitionIds[i];
             String schedule = schedules[i];
             String inputData = String.format("input_file:/data/%s.json;output_dir:/data/%s_output;user_id:system", 
-                                            processId, processId);
+                                            definitionId, definitionId);
             
-            // Create process via API
-            ProcessApiService.ApiResponse<ProcessManager.ProcessRecord> createResponse = 
-                apiService.createProcess(processId, "data-processing-pipeline", inputData, schedule);
+            // Create process definition via API
+            ProcessApiService.ApiResponse<ProcessManager.ProcessDefinition> createResponse = 
+                apiService.createProcessDefinition(definitionId, "data-processing-pipeline", inputData, schedule);
             
             if (createResponse.isSuccess()) {
-                logger.info("Created process: {} with schedule: {}", processId, schedule);
+                logger.info("Created process definition: {} with schedule: {}", definitionId, schedule);
             } else {
-                logger.error("Failed to create process: {} - {}", processId, createResponse.getMessage());
+                logger.error("Failed to create process definition: {} - {}", definitionId, createResponse.getMessage());
             }
         }
         
-        // List all processes
-        ProcessApiService.ApiResponse<List<ProcessManager.ProcessRecord>> allProcessesResponse = 
-            apiService.getAllProcesses();
+        // List all process definitions
+        ProcessApiService.ApiResponse<List<ProcessManager.ProcessDefinition>> allDefinitionsResponse = 
+            apiService.getAllProcessDefinitions();
         
-        if (allProcessesResponse.isSuccess()) {
-            logger.info("Total processes created: {}", allProcessesResponse.getData().size());
-            for (ProcessManager.ProcessRecord process : allProcessesResponse.getData()) {
-                logger.info("  - {}: {} (schedule: {})", process.getId(), process.getStatus(), process.getSchedule());
+        if (allDefinitionsResponse.isSuccess()) {
+            logger.info("Total process definitions created: {}", allDefinitionsResponse.getData().size());
+            for (ProcessManager.ProcessDefinition definition : allDefinitionsResponse.getData()) {
+                logger.info("  - {}: {} (schedule: {})", definition.getId(), definition.getCurrentStatus(), definition.getSchedule());
             }
         }
     }
@@ -240,60 +245,60 @@ public class CompleteDatabaseExample {
     private static void demonstrateScheduledProcesses(ProcessApiService apiService) {
         logger.info("\n=== Example 2: Scheduled Processes ===");
         
-        // Get scheduled processes
-        ProcessApiService.ApiResponse<List<ProcessManager.ProcessRecord>> scheduledResponse = 
-            apiService.getScheduledProcesses();
+        // Get scheduled process definitions
+        ProcessApiService.ApiResponse<List<ProcessManager.ProcessDefinition>> scheduledResponse = 
+            apiService.getScheduledProcessDefinitions();
         
         if (scheduledResponse.isSuccess()) {
-            logger.info("Scheduled processes: {}", scheduledResponse.getData().size());
-            for (ProcessManager.ProcessRecord process : scheduledResponse.getData()) {
-                logger.info("  - {}: schedule={}", process.getId(), process.getSchedule());
+            logger.info("Scheduled process definitions: {}", scheduledResponse.getData().size());
+            for (ProcessManager.ProcessDefinition definition : scheduledResponse.getData()) {
+                logger.info("  - {}: schedule={}", definition.getId(), definition.getSchedule());
             }
         }
         
-        // Create a manual-only process
-        ProcessApiService.ApiResponse<ProcessManager.ProcessRecord> manualResponse = 
-            apiService.createProcess("manual-test-process", "data-processing-pipeline", 
-                                   "input_file:/data/manual.json;output_dir:/data/manual_output", null);
+        // Create a manual-only process definition
+        ProcessApiService.ApiResponse<ProcessManager.ProcessDefinition> manualResponse = 
+            apiService.createProcessDefinition("manual-test-process", "data-processing-pipeline", 
+                                             "input_file:/data/manual.json;output_dir:/data/manual_output", null);
         
         if (manualResponse.isSuccess()) {
-            logger.info("Created manual process: {}", manualResponse.getData().getId());
+            logger.info("Created manual process definition: {}", manualResponse.getData().getId());
         }
     }
 
     private static void demonstrateProcessLifecycle(ProcessApiService apiService, ProcessController controller) {
         logger.info("\n=== Example 3: Process Lifecycle ===");
         
-        String processId = "lifecycle-demo-process";
+        String definitionId = "lifecycle-demo-process";
         
-        // Create process
-        ProcessApiService.ApiResponse<ProcessManager.ProcessRecord> createResponse = 
-            apiService.createProcess(processId, "data-processing-pipeline", 
-                                   "input_file:/data/lifecycle.json;output_dir:/data/lifecycle_output", null);
+        // Create process definition
+        ProcessApiService.ApiResponse<ProcessManager.ProcessDefinition> createResponse = 
+            apiService.createProcessDefinition(definitionId, "data-processing-pipeline", 
+                                             "input_file:/data/lifecycle.json;output_dir:/data/lifecycle_output", null);
         
         if (!createResponse.isSuccess()) {
-            logger.error("Failed to create process: {}", createResponse.getMessage());
+            logger.error("Failed to create process definition: {}", createResponse.getMessage());
             return;
         }
         
         // Start process
         ProcessApiService.ApiResponse<ProcessController.ProcessStartResponse> startResponse = 
-            apiService.startProcess(processId);
+            apiService.startProcess(definitionId);
         
         if (startResponse.isSuccess()) {
             logger.info("Process started: {}", startResponse.getData().getMessage());
             
             // Monitor for a short time
-            monitorProcessBriefly(apiService, processId);
+            monitorProcessBriefly(apiService, definitionId);
             
             // Get process state
             ProcessApiService.ApiResponse<ProcessController.ProcessStateResponse> stateResponse = 
-                apiService.getProcessState(processId);
+                apiService.getProcessState(definitionId);
             
             if (stateResponse.isSuccess()) {
-                ProcessManager.ProcessRecord process = stateResponse.getData().getProcessRecord();
-                logger.info("Process state: {} (task {}/{})", 
-                          process.getStatus(), process.getCurrentTaskIndex(), process.getTotalTasks());
+                ProcessManager.ProcessDefinition definition = stateResponse.getData().getDefinition();
+                logger.info("Process state: {} (active process: {})", 
+                          definition.getCurrentStatus(), definition.getCurrentProcessId());
             }
         } else {
             logger.error("Failed to start process: {}", startResponse.getMessage());
@@ -303,7 +308,7 @@ public class CompleteDatabaseExample {
     private static void demonstrateErrorHandling(ProcessApiService apiService) {
         logger.info("\n=== Example 4: Error Handling ===");
         
-        // Try to start non-existent process
+        // Try to start non-existent process definition
         ProcessApiService.ApiResponse<ProcessController.ProcessStartResponse> errorResponse = 
             apiService.startProcess("non-existent-process");
         
@@ -311,69 +316,74 @@ public class CompleteDatabaseExample {
             logger.info("Expected error when starting non-existent process: {}", errorResponse.getMessage());
         }
         
-        // Try to create duplicate process
+        // Try to create duplicate process definition
         String duplicateId = "duplicate-process";
-        apiService.createProcess(duplicateId, "data-processing-pipeline", "input_data:test", null);
+        apiService.createProcessDefinition(duplicateId, "data-processing-pipeline", "input_data:test", null);
         
-        ProcessApiService.ApiResponse<ProcessManager.ProcessRecord> duplicateResponse = 
-            apiService.createProcess(duplicateId, "data-processing-pipeline", "input_data:test", null);
+        ProcessApiService.ApiResponse<ProcessManager.ProcessDefinition> duplicateResponse = 
+            apiService.createProcessDefinition(duplicateId, "data-processing-pipeline", "input_data:test", null);
         
         if (!duplicateResponse.isSuccess()) {
-            logger.info("Expected error when creating duplicate process: {}", duplicateResponse.getMessage());
+            logger.info("Expected error when creating duplicate process definition: {}", duplicateResponse.getMessage());
         }
     }
 
     private static void demonstrateMonitoring(ProcessApiService apiService, ProcessManager processManager) {
         logger.info("\n=== Example 5: Monitoring and Reporting ===");
         
-        // Get processes by status
+        // Get process definitions by status
         String[] statuses = {"PENDING", "IN_PROGRESS", "COMPLETED", "FAILED"};
         
         for (String status : statuses) {
-            ProcessApiService.ApiResponse<List<ProcessManager.ProcessRecord>> statusResponse = 
-                apiService.getProcessesByStatus(status);
+            ProcessApiService.ApiResponse<List<ProcessManager.ProcessDefinition>> statusResponse = 
+                apiService.getProcessDefinitionsByStatus(status);
             
             if (statusResponse.isSuccess()) {
-                logger.info("Processes with status '{}': {}", status, statusResponse.getData().size());
+                logger.info("Process definitions with status '{}': {}", status, statusResponse.getData().size());
             }
         }
         
-        // Get execution history for a process (if any exist)
-        ProcessApiService.ApiResponse<List<ProcessManager.ProcessRecord>> allProcessesResponse = 
-            apiService.getAllProcesses();
+        // Get all process definitions
+        ProcessApiService.ApiResponse<List<ProcessManager.ProcessDefinition>> allDefinitionsResponse = 
+            apiService.getAllProcessDefinitions();
         
-        if (allProcessesResponse.isSuccess() && !allProcessesResponse.getData().isEmpty()) {
-            String firstProcessId = allProcessesResponse.getData().get(0).getId();
+        if (allDefinitionsResponse.isSuccess() && !allDefinitionsResponse.getData().isEmpty()) {
+            String firstDefinitionId = allDefinitionsResponse.getData().get(0).getId();
             
-            ProcessApiService.ApiResponse<List<ProcessManager.ExecutionRecord>> historyResponse = 
-                apiService.getExecutionHistory(firstProcessId);
+            // Get process state for first definition
+            ProcessApiService.ApiResponse<ProcessController.ProcessStateResponse> stateResponse = 
+                apiService.getProcessState(firstDefinitionId);
             
-            if (historyResponse.isSuccess()) {
-                logger.info("Execution history for {}: {} executions", 
-                          firstProcessId, historyResponse.getData().size());
+            if (stateResponse.isSuccess()) {
+                ProcessManager.ProcessDefinition definition = stateResponse.getData().getDefinition();
+                logger.info("Process definition {} status: {} (active process: {})", 
+                          firstDefinitionId, definition.getCurrentStatus(), definition.getCurrentProcessId());
                 
-                for (ProcessManager.ExecutionRecord execution : historyResponse.getData()) {
-                    logger.info("  - {}: {} (triggered by {})", 
-                              execution.getExecutionStartedAt(), 
-                              execution.getExecutionStatus(), 
-                              execution.getTriggeredBy());
+                if (definition.getStartedWhen() != null) {
+                    logger.info("  Started: {}", definition.getStartedWhen());
+                }
+                if (definition.getCompletedWhen() != null) {
+                    logger.info("  Completed: {}", definition.getCompletedWhen());
+                }
+                if (definition.getFailedWhen() != null) {
+                    logger.info("  Failed: {}", definition.getFailedWhen());
                 }
             }
         }
     }
 
-    private static void monitorProcessBriefly(ProcessApiService apiService, String processId) {
-        logger.info("Briefly monitoring process: {}", processId);
+    private static void monitorProcessBriefly(ProcessApiService apiService, String definitionId) {
+        logger.info("Briefly monitoring process definition: {}", definitionId);
         
         try {
             Thread.sleep(3000); // Wait 3 seconds
             
             ProcessApiService.ApiResponse<ProcessController.ProcessStateResponse> stateResponse = 
-                apiService.getProcessState(processId);
+                apiService.getProcessState(definitionId);
             
             if (stateResponse.isSuccess()) {
-                ProcessManager.ProcessRecord process = stateResponse.getData().getProcessRecord();
-                logger.info("Process status after 3 seconds: {}", process.getStatus());
+                ProcessManager.ProcessDefinition definition = stateResponse.getData().getDefinition();
+                logger.info("Process definition status after 3 seconds: {}", definition.getCurrentStatus());
             }
             
         } catch (InterruptedException e) {

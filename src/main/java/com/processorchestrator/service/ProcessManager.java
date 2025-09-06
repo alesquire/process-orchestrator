@@ -16,7 +16,10 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Service for managing processes stored in the database
+ * Service for managing process definitions and active processes
+ * 
+ * Process Definitions: User-managed templates with execution history
+ * Processes: Engine-managed active execution instances
  */
 public class ProcessManager {
     private static final Logger logger = LoggerFactory.getLogger(ProcessManager.class);
@@ -26,13 +29,15 @@ public class ProcessManager {
         this.dataSource = dataSource;
     }
 
+    // ==================== PROCESS DEFINITIONS MANAGEMENT ====================
+
     /**
-     * Create a new process definition in the database
+     * Create a new process definition (user-managed)
      */
-    public void createProcess(String id, String type, String inputData, String schedule) {
+    public void createProcessDefinition(String id, String type, String inputData, String schedule) {
         String sql = """
-            INSERT INTO processes (id, type, input_data, schedule, status, total_tasks, created_at, updated_at)
-            VALUES (?, ?, ?, ?, 'PENDING', 0, ?, ?)
+            INSERT INTO process_definitions (id, type, input_data, schedule, current_status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, 'PENDING', ?, ?)
             """;
         
         try (Connection conn = dataSource.getConnection();
@@ -47,19 +52,19 @@ public class ProcessManager {
             stmt.setTimestamp(6, Timestamp.from(now));
             
             stmt.executeUpdate();
-            logger.info("Created process with ID: {}", id);
+            logger.info("Created process definition with ID: {}", id);
             
         } catch (SQLException e) {
-            logger.error("Error creating process with ID: {}", id, e);
-            throw new RuntimeException("Failed to create process", e);
+            logger.error("Error creating process definition with ID: {}", id, e);
+            throw new RuntimeException("Failed to create process definition", e);
         }
     }
 
     /**
-     * Get a process by ID
+     * Get a process definition by ID
      */
-    public Optional<ProcessRecord> getProcess(String id) {
-        String sql = "SELECT * FROM processes WHERE id = ?";
+    public Optional<ProcessDefinition> getProcessDefinition(String id) {
+        String sql = "SELECT * FROM process_definitions WHERE id = ?";
         
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -68,46 +73,46 @@ public class ProcessManager {
             ResultSet rs = stmt.executeQuery();
             
             if (rs.next()) {
-                return Optional.of(mapRowToProcessRecord(rs));
+                return Optional.of(mapRowToProcessDefinition(rs));
             }
             
         } catch (SQLException e) {
-            logger.error("Error retrieving process with ID: {}", id, e);
-            throw new RuntimeException("Failed to retrieve process", e);
+            logger.error("Error retrieving process definition with ID: {}", id, e);
+            throw new RuntimeException("Failed to retrieve process definition", e);
         }
         
         return Optional.empty();
     }
 
     /**
-     * Get all processes
+     * Get all process definitions
      */
-    public List<ProcessRecord> getAllProcesses() {
-        List<ProcessRecord> processes = new ArrayList<>();
-        String sql = "SELECT * FROM processes ORDER BY created_at DESC";
+    public List<ProcessDefinition> getAllProcessDefinitions() {
+        List<ProcessDefinition> definitions = new ArrayList<>();
+        String sql = "SELECT * FROM process_definitions ORDER BY created_at DESC";
         
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             ResultSet rs = stmt.executeQuery();
             while (rs.next()) {
-                processes.add(mapRowToProcessRecord(rs));
+                definitions.add(mapRowToProcessDefinition(rs));
             }
             
         } catch (SQLException e) {
-            logger.error("Error retrieving all processes", e);
-            throw new RuntimeException("Failed to retrieve processes", e);
+            logger.error("Error retrieving all process definitions", e);
+            throw new RuntimeException("Failed to retrieve process definitions", e);
         }
         
-        return processes;
+        return definitions;
     }
 
     /**
-     * Get processes by status
+     * Get process definitions by status
      */
-    public List<ProcessRecord> getProcessesByStatus(String status) {
-        List<ProcessRecord> processes = new ArrayList<>();
-        String sql = "SELECT * FROM processes WHERE status = ? ORDER BY created_at DESC";
+    public List<ProcessDefinition> getProcessDefinitionsByStatus(String status) {
+        List<ProcessDefinition> definitions = new ArrayList<>();
+        String sql = "SELECT * FROM process_definitions WHERE current_status = ? ORDER BY created_at DESC";
         
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -115,51 +120,207 @@ public class ProcessManager {
             stmt.setString(1, status);
             ResultSet rs = stmt.executeQuery();
             while (rs.next()) {
-                processes.add(mapRowToProcessRecord(rs));
+                definitions.add(mapRowToProcessDefinition(rs));
             }
             
         } catch (SQLException e) {
-            logger.error("Error retrieving processes by status: {}", status, e);
-            throw new RuntimeException("Failed to retrieve processes by status", e);
+            logger.error("Error retrieving process definitions by status: {}", status, e);
+            throw new RuntimeException("Failed to retrieve process definitions by status", e);
         }
         
-        return processes;
+        return definitions;
     }
 
     /**
-     * Get processes that should be scheduled (have cron expressions)
+     * Get scheduled process definitions
      */
-    public List<ProcessRecord> getScheduledProcesses() {
-        List<ProcessRecord> processes = new ArrayList<>();
-        String sql = "SELECT * FROM processes WHERE schedule IS NOT NULL AND schedule != '' ORDER BY created_at DESC";
+    public List<ProcessDefinition> getScheduledProcessDefinitions() {
+        List<ProcessDefinition> definitions = new ArrayList<>();
+        String sql = "SELECT * FROM process_definitions WHERE schedule IS NOT NULL AND schedule != '' ORDER BY created_at DESC";
         
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             ResultSet rs = stmt.executeQuery();
             while (rs.next()) {
-                processes.add(mapRowToProcessRecord(rs));
+                definitions.add(mapRowToProcessDefinition(rs));
             }
             
         } catch (SQLException e) {
-            logger.error("Error retrieving scheduled processes", e);
-            throw new RuntimeException("Failed to retrieve scheduled processes", e);
+            logger.error("Error retrieving scheduled process definitions", e);
+            throw new RuntimeException("Failed to retrieve scheduled process definitions", e);
         }
         
-        return processes;
+        return definitions;
     }
 
     /**
-     * Update process status
+     * Update process definition status and execution statistics
      */
-    public void updateProcessStatus(String id, String status) {
-        updateProcessStatus(id, status, null);
+    public void updateProcessDefinitionStatus(String definitionId, String status, String currentProcessId) {
+        updateProcessDefinitionStatus(definitionId, status, currentProcessId, null, null);
     }
 
     /**
-     * Update process status with error message
+     * Update process definition with execution statistics
      */
-    public void updateProcessStatus(String id, String status, String errorMessage) {
+    public void updateProcessDefinitionStatus(String definitionId, String status, String currentProcessId, 
+                                            Instant executionTime, String errorMessage) {
+        String sql = """
+            UPDATE process_definitions 
+            SET current_status = ?, current_process_id = ?, updated_at = ?
+            """;
+        
+        // Add execution time fields based on status
+        switch (status.toUpperCase()) {
+            case "IN_PROGRESS":
+                sql += ", started_when = ?";
+                break;
+            case "COMPLETED":
+                sql += ", completed_when = ?";
+                break;
+            case "FAILED":
+                sql += ", failed_when = ?, last_error_message = ?";
+                break;
+            case "STOPPED":
+                sql += ", stopped_when = ?";
+                break;
+        }
+        
+        sql += " WHERE id = ?";
+        
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            int paramIndex = 1;
+            stmt.setString(paramIndex++, status);
+            stmt.setString(paramIndex++, currentProcessId);
+            stmt.setTimestamp(paramIndex++, Timestamp.from(Instant.now()));
+            
+            // Add execution time based on status
+            if (executionTime != null) {
+                switch (status.toUpperCase()) {
+                    case "IN_PROGRESS":
+                        stmt.setTimestamp(paramIndex++, Timestamp.from(executionTime));
+                        break;
+                    case "COMPLETED":
+                        stmt.setTimestamp(paramIndex++, Timestamp.from(executionTime));
+                        break;
+                    case "FAILED":
+                        stmt.setTimestamp(paramIndex++, Timestamp.from(executionTime));
+                        stmt.setString(paramIndex++, errorMessage);
+                        break;
+                    case "STOPPED":
+                        stmt.setTimestamp(paramIndex++, Timestamp.from(executionTime));
+                        break;
+                }
+            }
+            
+            stmt.setString(paramIndex, definitionId);
+            
+            int rowsUpdated = stmt.executeUpdate();
+            if (rowsUpdated == 0) {
+                throw new RuntimeException("Process definition not found: " + definitionId);
+            }
+            
+            logger.info("Updated process definition {} status to {}", definitionId, status);
+            
+        } catch (SQLException e) {
+            logger.error("Error updating process definition status for ID: {}", definitionId, e);
+            throw new RuntimeException("Failed to update process definition status", e);
+        }
+    }
+
+    /**
+     * Delete a process definition (manual deletion only)
+     */
+    public void deleteProcessDefinition(String id) {
+        String sql = "DELETE FROM process_definitions WHERE id = ?";
+        
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setString(1, id);
+            int rowsDeleted = stmt.executeUpdate();
+            
+            if (rowsDeleted == 0) {
+                throw new RuntimeException("Process definition not found: " + id);
+            }
+            
+            logger.info("Deleted process definition with ID: {}", id);
+            
+        } catch (SQLException e) {
+            logger.error("Error deleting process definition with ID: {}", id, e);
+            throw new RuntimeException("Failed to delete process definition", e);
+        }
+    }
+
+    // ==================== ACTIVE PROCESSES MANAGEMENT ====================
+
+    /**
+     * Create an active process instance (engine-managed)
+     */
+    public void createActiveProcess(String processId, String definitionId, String type, String inputData) {
+        String sql = """
+            INSERT INTO processes (id, definition_id, type, input_data, status, total_tasks, created_at, updated_at)
+            VALUES (?, ?, ?, ?, 'PENDING', 0, ?, ?)
+            """;
+        
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            Instant now = Instant.now();
+            stmt.setString(1, processId);
+            stmt.setString(2, definitionId);
+            stmt.setString(3, type);
+            stmt.setString(4, inputData);
+            stmt.setTimestamp(5, Timestamp.from(now));
+            stmt.setTimestamp(6, Timestamp.from(now));
+            
+            stmt.executeUpdate();
+            logger.info("Created active process with ID: {}", processId);
+            
+        } catch (SQLException e) {
+            logger.error("Error creating active process with ID: {}", processId, e);
+            throw new RuntimeException("Failed to create active process", e);
+        }
+    }
+
+    /**
+     * Get an active process by ID
+     */
+    public Optional<ActiveProcess> getActiveProcess(String processId) {
+        String sql = "SELECT * FROM processes WHERE id = ?";
+        
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setString(1, processId);
+            ResultSet rs = stmt.executeQuery();
+            
+            if (rs.next()) {
+                return Optional.of(mapRowToActiveProcess(rs));
+            }
+            
+        } catch (SQLException e) {
+            logger.error("Error retrieving active process with ID: {}", processId, e);
+            throw new RuntimeException("Failed to retrieve active process", e);
+        }
+        
+        return Optional.empty();
+    }
+
+    /**
+     * Update active process status
+     */
+    public void updateActiveProcessStatus(String processId, String status) {
+        updateActiveProcessStatus(processId, status, null);
+    }
+
+    /**
+     * Update active process status with error message
+     */
+    public void updateActiveProcessStatus(String processId, String status, String errorMessage) {
         String sql = """
             UPDATE processes 
             SET status = ?, error_message = ?, updated_at = ?
@@ -172,26 +333,26 @@ public class ProcessManager {
             stmt.setString(1, status);
             stmt.setString(2, errorMessage);
             stmt.setTimestamp(3, Timestamp.from(Instant.now()));
-            stmt.setString(4, id);
+            stmt.setString(4, processId);
             
             int rowsUpdated = stmt.executeUpdate();
             if (rowsUpdated == 0) {
-                throw new RuntimeException("Process not found: " + id);
+                throw new RuntimeException("Active process not found: " + processId);
             }
             
-            logger.info("Updated process {} status to {}", id, status);
+            logger.info("Updated active process {} status to {}", processId, status);
             
         } catch (SQLException e) {
-            logger.error("Error updating process status for ID: {}", id, e);
-            throw new RuntimeException("Failed to update process status", e);
+            logger.error("Error updating active process status for ID: {}", processId, e);
+            throw new RuntimeException("Failed to update active process status", e);
         }
     }
 
     /**
-     * Update process execution details
+     * Update active process execution details
      */
-    public void updateProcessExecution(String id, int currentTaskIndex, int totalTasks, 
-                                     Instant startedAt, Instant completedAt) {
+    public void updateActiveProcessExecution(String processId, int currentTaskIndex, int totalTasks, 
+                                           Instant startedAt, Instant completedAt) {
         String sql = """
             UPDATE processes 
             SET current_task_index = ?, total_tasks = ?, started_at = ?, completed_at = ?, updated_at = ?
@@ -206,145 +367,94 @@ public class ProcessManager {
             stmt.setTimestamp(3, startedAt != null ? Timestamp.from(startedAt) : null);
             stmt.setTimestamp(4, completedAt != null ? Timestamp.from(completedAt) : null);
             stmt.setTimestamp(5, Timestamp.from(Instant.now()));
-            stmt.setString(6, id);
+            stmt.setString(6, processId);
             
             stmt.executeUpdate();
             
         } catch (SQLException e) {
-            logger.error("Error updating process execution for ID: {}", id, e);
-            throw new RuntimeException("Failed to update process execution", e);
+            logger.error("Error updating active process execution for ID: {}", processId, e);
+            throw new RuntimeException("Failed to update active process execution", e);
         }
     }
 
     /**
-     * Delete a process (only if not completed)
+     * Delete an active process (engine cleanup)
      */
-    public void deleteProcess(String id) {
-        String sql = "DELETE FROM processes WHERE id = ? AND status != 'COMPLETED'";
-        
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            
-            stmt.setString(1, id);
-            int rowsDeleted = stmt.executeUpdate();
-            
-            if (rowsDeleted == 0) {
-                throw new RuntimeException("Process not found or cannot be deleted (only completed processes can be deleted): " + id);
-            }
-            
-            logger.info("Deleted process with ID: {}", id);
-            
-        } catch (SQLException e) {
-            logger.error("Error deleting process with ID: {}", id, e);
-            throw new RuntimeException("Failed to delete process", e);
-        }
-    }
-
-    /**
-     * Record process execution attempt
-     */
-    public void recordExecution(String executionId, String processId, String triggeredBy, 
-                              Instant startedAt, Instant completedAt, String status, String errorMessage) {
-        String sql = """
-            INSERT INTO process_executions (execution_id, process_id, execution_started_at, 
-                                          execution_completed_at, execution_status, triggered_by, 
-                                          error_message, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """;
-        
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            
-            stmt.setString(1, executionId);
-            stmt.setString(2, processId);
-            stmt.setTimestamp(3, Timestamp.from(startedAt));
-            stmt.setTimestamp(4, completedAt != null ? Timestamp.from(completedAt) : null);
-            stmt.setString(5, status);
-            stmt.setString(6, triggeredBy);
-            stmt.setString(7, errorMessage);
-            stmt.setTimestamp(8, Timestamp.from(Instant.now()));
-            
-            stmt.executeUpdate();
-            
-        } catch (SQLException e) {
-            logger.error("Error recording execution for process ID: {}", processId, e);
-            throw new RuntimeException("Failed to record execution", e);
-        }
-    }
-
-    /**
-     * Get execution history for a process
-     */
-    public List<ExecutionRecord> getExecutionHistory(String processId) {
-        List<ExecutionRecord> executions = new ArrayList<>();
-        String sql = """
-            SELECT * FROM process_executions 
-            WHERE process_id = ? 
-            ORDER BY execution_started_at DESC
-            """;
+    public void deleteActiveProcess(String processId) {
+        String sql = "DELETE FROM processes WHERE id = ?";
         
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setString(1, processId);
-            ResultSet rs = stmt.executeQuery();
+            int rowsDeleted = stmt.executeUpdate();
             
-            while (rs.next()) {
-                executions.add(mapRowToExecutionRecord(rs));
+            if (rowsDeleted == 0) {
+                throw new RuntimeException("Active process not found: " + processId);
             }
             
+            logger.info("Deleted active process with ID: {}", processId);
+            
         } catch (SQLException e) {
-            logger.error("Error retrieving execution history for process ID: {}", processId, e);
-            throw new RuntimeException("Failed to retrieve execution history", e);
+            logger.error("Error deleting active process with ID: {}", processId, e);
+            throw new RuntimeException("Failed to delete active process", e);
         }
-        
-        return executions;
     }
 
-    private ProcessRecord mapRowToProcessRecord(ResultSet rs) throws SQLException {
-        ProcessRecord record = new ProcessRecord();
-        record.setId(rs.getString("id"));
-        record.setType(rs.getString("type"));
-        record.setInputData(rs.getString("input_data"));
-        record.setSchedule(rs.getString("schedule"));
-        record.setStatus(rs.getString("status"));
-        record.setCurrentTaskIndex(rs.getInt("current_task_index"));
-        record.setTotalTasks(rs.getInt("total_tasks"));
-        record.setStartedAt(Optional.ofNullable(rs.getTimestamp("started_at")).map(Timestamp::toInstant).orElse(null));
-        record.setCompletedAt(Optional.ofNullable(rs.getTimestamp("completed_at")).map(Timestamp::toInstant).orElse(null));
-        record.setErrorMessage(rs.getString("error_message"));
-        record.setCreatedAt(Optional.ofNullable(rs.getTimestamp("created_at")).map(Timestamp::toInstant).orElse(null));
-        record.setUpdatedAt(Optional.ofNullable(rs.getTimestamp("updated_at")).map(Timestamp::toInstant).orElse(null));
-        return record;
+    // ==================== HELPER METHODS ====================
+
+    private ProcessDefinition mapRowToProcessDefinition(ResultSet rs) throws SQLException {
+        ProcessDefinition definition = new ProcessDefinition();
+        definition.setId(rs.getString("id"));
+        definition.setType(rs.getString("type"));
+        definition.setInputData(rs.getString("input_data"));
+        definition.setSchedule(rs.getString("schedule"));
+        definition.setCurrentStatus(rs.getString("current_status"));
+        definition.setCurrentProcessId(rs.getString("current_process_id"));
+        definition.setStartedWhen(Optional.ofNullable(rs.getTimestamp("started_when")).map(Timestamp::toInstant).orElse(null));
+        definition.setCompletedWhen(Optional.ofNullable(rs.getTimestamp("completed_when")).map(Timestamp::toInstant).orElse(null));
+        definition.setFailedWhen(Optional.ofNullable(rs.getTimestamp("failed_when")).map(Timestamp::toInstant).orElse(null));
+        definition.setStoppedWhen(Optional.ofNullable(rs.getTimestamp("stopped_when")).map(Timestamp::toInstant).orElse(null));
+        definition.setLastErrorMessage(rs.getString("last_error_message"));
+        definition.setCreatedAt(Optional.ofNullable(rs.getTimestamp("created_at")).map(Timestamp::toInstant).orElse(null));
+        definition.setUpdatedAt(Optional.ofNullable(rs.getTimestamp("updated_at")).map(Timestamp::toInstant).orElse(null));
+        return definition;
     }
 
-    private ExecutionRecord mapRowToExecutionRecord(ResultSet rs) throws SQLException {
-        ExecutionRecord record = new ExecutionRecord();
-        record.setExecutionId(rs.getString("execution_id"));
-        record.setProcessId(rs.getString("process_id"));
-        record.setExecutionStartedAt(rs.getTimestamp("execution_started_at").toInstant());
-        record.setExecutionCompletedAt(Optional.ofNullable(rs.getTimestamp("execution_completed_at")).map(Timestamp::toInstant).orElse(null));
-        record.setExecutionStatus(rs.getString("execution_status"));
-        record.setTriggeredBy(rs.getString("triggered_by"));
-        record.setErrorMessage(rs.getString("error_message"));
-        record.setCreatedAt(rs.getTimestamp("created_at").toInstant());
-        return record;
+    private ActiveProcess mapRowToActiveProcess(ResultSet rs) throws SQLException {
+        ActiveProcess process = new ActiveProcess();
+        process.setId(rs.getString("id"));
+        process.setDefinitionId(rs.getString("definition_id"));
+        process.setType(rs.getString("type"));
+        process.setInputData(rs.getString("input_data"));
+        process.setStatus(rs.getString("status"));
+        process.setCurrentTaskIndex(rs.getInt("current_task_index"));
+        process.setTotalTasks(rs.getInt("total_tasks"));
+        process.setStartedAt(Optional.ofNullable(rs.getTimestamp("started_at")).map(Timestamp::toInstant).orElse(null));
+        process.setCompletedAt(Optional.ofNullable(rs.getTimestamp("completed_at")).map(Timestamp::toInstant).orElse(null));
+        process.setErrorMessage(rs.getString("error_message"));
+        process.setCreatedAt(Optional.ofNullable(rs.getTimestamp("created_at")).map(Timestamp::toInstant).orElse(null));
+        process.setUpdatedAt(Optional.ofNullable(rs.getTimestamp("updated_at")).map(Timestamp::toInstant).orElse(null));
+        return process;
     }
+
+    // ==================== DATA CLASSES ====================
 
     /**
-     * Process record data class
+     * Process Definition - User-managed template with execution history
      */
-    public static class ProcessRecord {
+    public static class ProcessDefinition {
         private String id;
         private String type;
         private String inputData;
         private String schedule;
-        private String status;
-        private int currentTaskIndex;
-        private int totalTasks;
-        private Instant startedAt;
-        private Instant completedAt;
-        private String errorMessage;
+        private String currentStatus;
+        private String currentProcessId;
+        private Instant startedWhen;
+        private Instant completedWhen;
+        private Instant failedWhen;
+        private Instant stoppedWhen;
+        private String lastErrorMessage;
         private Instant createdAt;
         private Instant updatedAt;
 
@@ -360,6 +470,64 @@ public class ProcessManager {
         
         public String getSchedule() { return schedule; }
         public void setSchedule(String schedule) { this.schedule = schedule; }
+        
+        public String getCurrentStatus() { return currentStatus; }
+        public void setCurrentStatus(String currentStatus) { this.currentStatus = currentStatus; }
+        
+        public String getCurrentProcessId() { return currentProcessId; }
+        public void setCurrentProcessId(String currentProcessId) { this.currentProcessId = currentProcessId; }
+        
+        public Instant getStartedWhen() { return startedWhen; }
+        public void setStartedWhen(Instant startedWhen) { this.startedWhen = startedWhen; }
+        
+        public Instant getCompletedWhen() { return completedWhen; }
+        public void setCompletedWhen(Instant completedWhen) { this.completedWhen = completedWhen; }
+        
+        public Instant getFailedWhen() { return failedWhen; }
+        public void setFailedWhen(Instant failedWhen) { this.failedWhen = failedWhen; }
+        
+        public Instant getStoppedWhen() { return stoppedWhen; }
+        public void setStoppedWhen(Instant stoppedWhen) { this.stoppedWhen = stoppedWhen; }
+        
+        public String getLastErrorMessage() { return lastErrorMessage; }
+        public void setLastErrorMessage(String lastErrorMessage) { this.lastErrorMessage = lastErrorMessage; }
+        
+        public Instant getCreatedAt() { return createdAt; }
+        public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+        
+        public Instant getUpdatedAt() { return updatedAt; }
+        public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+    }
+
+    /**
+     * Active Process - Engine-managed execution instance
+     */
+    public static class ActiveProcess {
+        private String id;
+        private String definitionId;
+        private String type;
+        private String inputData;
+        private String status;
+        private int currentTaskIndex;
+        private int totalTasks;
+        private Instant startedAt;
+        private Instant completedAt;
+        private String errorMessage;
+        private Instant createdAt;
+        private Instant updatedAt;
+
+        // Getters and setters
+        public String getId() { return id; }
+        public void setId(String id) { this.id = id; }
+        
+        public String getDefinitionId() { return definitionId; }
+        public void setDefinitionId(String definitionId) { this.definitionId = definitionId; }
+        
+        public String getType() { return type; }
+        public void setType(String type) { this.type = type; }
+        
+        public String getInputData() { return inputData; }
+        public void setInputData(String inputData) { this.inputData = inputData; }
         
         public String getStatus() { return status; }
         public void setStatus(String status) { this.status = status; }
@@ -384,44 +552,5 @@ public class ProcessManager {
         
         public Instant getUpdatedAt() { return updatedAt; }
         public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
-    }
-
-    /**
-     * Execution record data class
-     */
-    public static class ExecutionRecord {
-        private String executionId;
-        private String processId;
-        private Instant executionStartedAt;
-        private Instant executionCompletedAt;
-        private String executionStatus;
-        private String triggeredBy;
-        private String errorMessage;
-        private Instant createdAt;
-
-        // Getters and setters
-        public String getExecutionId() { return executionId; }
-        public void setExecutionId(String executionId) { this.executionId = executionId; }
-        
-        public String getProcessId() { return processId; }
-        public void setProcessId(String processId) { this.processId = processId; }
-        
-        public Instant getExecutionStartedAt() { return executionStartedAt; }
-        public void setExecutionStartedAt(Instant executionStartedAt) { this.executionStartedAt = executionStartedAt; }
-        
-        public Instant getExecutionCompletedAt() { return executionCompletedAt; }
-        public void setExecutionCompletedAt(Instant executionCompletedAt) { this.executionCompletedAt = executionCompletedAt; }
-        
-        public String getExecutionStatus() { return executionStatus; }
-        public void setExecutionStatus(String executionStatus) { this.executionStatus = executionStatus; }
-        
-        public String getTriggeredBy() { return triggeredBy; }
-        public void setTriggeredBy(String triggeredBy) { this.triggeredBy = triggeredBy; }
-        
-        public String getErrorMessage() { return errorMessage; }
-        public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; }
-        
-        public Instant getCreatedAt() { return createdAt; }
-        public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     }
 }

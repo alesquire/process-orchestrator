@@ -90,13 +90,34 @@ public class DatabaseDrivenProcessExample {
         try (Connection connection = dataSource.getConnection();
              Statement statement = connection.createStatement()) {
             
-            // Create processes table
-            String createProcessesTable = """
-                CREATE TABLE IF NOT EXISTS processes (
+            // Create process definitions table (user-managed)
+            String createProcessDefinitionsTable = """
+                CREATE TABLE IF NOT EXISTS process_definitions (
                     id VARCHAR(255) PRIMARY KEY,
                     type VARCHAR(255) NOT NULL,
                     input_data TEXT NOT NULL,
                     schedule VARCHAR(255),
+                    current_status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
+                    current_process_id VARCHAR(255),
+                    started_when TIMESTAMP,
+                    completed_when TIMESTAMP,
+                    failed_when TIMESTAMP,
+                    stopped_when TIMESTAMP,
+                    last_error_message TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """;
+            
+            statement.execute(createProcessDefinitionsTable);
+            
+            // Create processes table (engine-managed)
+            String createProcessesTable = """
+                CREATE TABLE IF NOT EXISTS processes (
+                    id VARCHAR(255) PRIMARY KEY,
+                    definition_id VARCHAR(255) NOT NULL,
+                    type VARCHAR(255) NOT NULL,
+                    input_data TEXT NOT NULL,
                     status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
                     current_task_index INTEGER NOT NULL DEFAULT 0,
                     total_tasks INTEGER NOT NULL,
@@ -104,7 +125,8 @@ public class DatabaseDrivenProcessExample {
                     completed_at TIMESTAMP,
                     error_message TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (definition_id) REFERENCES process_definitions(id) ON DELETE CASCADE
                 )
                 """;
             
@@ -135,23 +157,6 @@ public class DatabaseDrivenProcessExample {
                 """;
             
             statement.execute(createTasksTable);
-            
-            // Create process executions table
-            String createExecutionsTable = """
-                CREATE TABLE IF NOT EXISTS process_executions (
-                    execution_id VARCHAR(255) PRIMARY KEY,
-                    process_id VARCHAR(255) NOT NULL,
-                    execution_started_at TIMESTAMP NOT NULL,
-                    execution_completed_at TIMESTAMP,
-                    execution_status VARCHAR(50) NOT NULL,
-                    triggered_by VARCHAR(50) NOT NULL,
-                    error_message TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (process_id) REFERENCES processes(id) ON DELETE CASCADE
-                )
-                """;
-            
-            statement.execute(createExecutionsTable);
             
             logger.info("Database schema initialized successfully");
             
@@ -197,84 +202,84 @@ public class DatabaseDrivenProcessExample {
     }
 
     private static void createAndRunManualProcess(ProcessController controller) {
-        logger.info("Creating manual process...");
+        logger.info("Creating manual process definition...");
         
-        // Create process with input data
-        String processId = "manual-data-process-001";
+        // Create process definition with input data
+        String definitionId = "manual-data-process-001";
         String processType = "data-processing-pipeline";
         String inputData = "input_file:/data/sample_input.json;output_dir:/data/output;user_id:user123;batch_size:100";
         String schedule = null; // Manual execution only
         
-        // Create the process
-        ProcessManager.ProcessRecord process = controller.createProcess(processId, processType, inputData, schedule);
-        logger.info("Created process: {}", process.getId());
+        // Create the process definition
+        ProcessManager.ProcessDefinition definition = controller.createProcessDefinition(definitionId, processType, inputData, schedule);
+        logger.info("Created process definition: {}", definition.getId());
         
         // Start the process
-        ProcessController.ProcessStartResponse startResponse = controller.startProcess(processId);
+        ProcessController.ProcessStartResponse startResponse = controller.startProcess(definitionId);
         logger.info("Start response: success={}, message={}", startResponse.isSuccess(), startResponse.getMessage());
         
         // Monitor the process
-        monitorProcess(controller, processId);
+        monitorProcess(controller, definitionId);
         
         // Get final state
-        ProcessController.ProcessStateResponse stateResponse = controller.getProcessState(processId);
-        logger.info("Final process state: {}", stateResponse.getProcessRecord().getStatus());
+        ProcessController.ProcessStateResponse stateResponse = controller.getProcessState(definitionId);
+        logger.info("Final process state: {}", stateResponse.getDefinition().getCurrentStatus());
     }
 
     private static void createScheduledProcess(ProcessController controller, ProcessManager processManager) {
-        logger.info("Creating scheduled process...");
+        logger.info("Creating scheduled process definition...");
         
-        // Create process with cron schedule
-        String processId = "scheduled-backup-process-001";
+        // Create process definition with cron schedule
+        String definitionId = "scheduled-backup-process-001";
         String processType = "data-processing-pipeline";
         String inputData = "input_file:/backup/source.json;output_dir:/backup/output;user_id:backup-service";
         String schedule = "0 2 * * *"; // Daily at 2 AM
         
-        // Create the process
-        ProcessManager.ProcessRecord process = controller.createProcess(processId, processType, inputData, schedule);
-        logger.info("Created scheduled process: {} with schedule: {}", process.getId(), process.getSchedule());
+        // Create the process definition
+        ProcessManager.ProcessDefinition definition = controller.createProcessDefinition(definitionId, processType, inputData, schedule);
+        logger.info("Created scheduled process definition: {} with schedule: {}", definition.getId(), definition.getSchedule());
         
-        // List scheduled processes
-        List<ProcessManager.ProcessRecord> scheduledProcesses = processManager.getScheduledProcesses();
-        logger.info("Total scheduled processes: {}", scheduledProcesses.size());
+        // List scheduled process definitions
+        List<ProcessManager.ProcessDefinition> scheduledDefinitions = processManager.getScheduledProcessDefinitions();
+        logger.info("Total scheduled process definitions: {}", scheduledDefinitions.size());
     }
 
     private static void demonstrateProcessManagement(ProcessController controller, ProcessManager processManager) {
         logger.info("Demonstrating process management operations...");
         
-        // Get all processes
-        List<ProcessManager.ProcessRecord> allProcesses = controller.getAllProcesses();
-        logger.info("Total processes: {}", allProcesses.size());
+        // Get all process definitions
+        List<ProcessManager.ProcessDefinition> allDefinitions = controller.getAllProcessDefinitions();
+        logger.info("Total process definitions: {}", allDefinitions.size());
         
-        // Get processes by status
-        List<ProcessManager.ProcessRecord> pendingProcesses = controller.getProcessesByStatus("PENDING");
-        logger.info("Pending processes: {}", pendingProcesses.size());
+        // Get process definitions by status
+        List<ProcessManager.ProcessDefinition> pendingDefinitions = controller.getProcessDefinitionsByStatus("PENDING");
+        logger.info("Pending process definitions: {}", pendingDefinitions.size());
         
-        // Get processes by status
-        List<ProcessManager.ProcessRecord> completedProcesses = controller.getProcessesByStatus("COMPLETED");
-        logger.info("Completed processes: {}", completedProcesses.size());
+        // Get process definitions by status
+        List<ProcessManager.ProcessDefinition> completedDefinitions = controller.getProcessDefinitionsByStatus("COMPLETED");
+        logger.info("Completed process definitions: {}", completedDefinitions.size());
         
-        // Show process details
-        for (ProcessManager.ProcessRecord process : allProcesses) {
-            logger.info("Process: id={}, type={}, status={}, schedule={}", 
-                      process.getId(), process.getType(), process.getStatus(), process.getSchedule());
+        // Show process definition details
+        for (ProcessManager.ProcessDefinition definition : allDefinitions) {
+            logger.info("Process Definition: id={}, type={}, status={}, schedule={}", 
+                      definition.getId(), definition.getType(), definition.getCurrentStatus(), definition.getSchedule());
         }
     }
 
     private static void restartCompletedProcess(ProcessController controller) {
-        logger.info("Demonstrating restart of completed process...");
+        logger.info("Demonstrating restart of completed process definition...");
         
-        // First, create and complete a process
-        String processId = "restart-demo-process-001";
+        // First, create and complete a process definition
+        String definitionId = "restart-demo-process-001";
         String processType = "data-processing-pipeline";
         String inputData = "input_file:/data/demo_input.json;output_dir:/data/demo_output;user_id:demo-user";
         
-        // Create the process
-        ProcessManager.ProcessRecord process = controller.createProcess(processId, processType, inputData, null);
-        logger.info("Created process for restart demo: {}", process.getId());
+        // Create the process definition
+        ProcessManager.ProcessDefinition definition = controller.createProcessDefinition(definitionId, processType, inputData, null);
+        logger.info("Created process definition for restart demo: {}", definition.getId());
         
         // Start the process
-        ProcessController.ProcessStartResponse startResponse = controller.startProcess(processId);
+        ProcessController.ProcessStartResponse startResponse = controller.startProcess(definitionId);
         logger.info("First start: success={}", startResponse.isSuccess());
         
         // Wait a bit and check status
@@ -285,33 +290,33 @@ public class DatabaseDrivenProcessExample {
         }
         
         // Get process state
-        ProcessController.ProcessStateResponse stateResponse = controller.getProcessState(processId);
-        logger.info("Process status after start: {}", stateResponse.getProcessRecord().getStatus());
+        ProcessController.ProcessStateResponse stateResponse = controller.getProcessState(definitionId);
+        logger.info("Process status after start: {}", stateResponse.getDefinition().getCurrentStatus());
         
         // Try to restart (this should work even if completed)
-        ProcessController.ProcessStartResponse restartResponse = controller.startProcess(processId);
+        ProcessController.ProcessStartResponse restartResponse = controller.startProcess(definitionId);
         logger.info("Restart attempt: success={}, message={}", restartResponse.isSuccess(), restartResponse.getMessage());
     }
 
-    private static void monitorProcess(ProcessController controller, String processId) {
-        logger.info("Monitoring process: {}", processId);
+    private static void monitorProcess(ProcessController controller, String definitionId) {
+        logger.info("Monitoring process definition: {}", definitionId);
         
         int maxWaitTime = 30; // 30 seconds max wait for demo
         int waitTime = 0;
         
         while (waitTime < maxWaitTime) {
             try {
-                ProcessController.ProcessStateResponse stateResponse = controller.getProcessState(processId);
-                ProcessManager.ProcessRecord process = stateResponse.getProcessRecord();
+                ProcessController.ProcessStateResponse stateResponse = controller.getProcessState(definitionId);
+                ProcessManager.ProcessDefinition definition = stateResponse.getDefinition();
                 
                 logger.info("Process Status: {} (Task {}/{})", 
-                          process.getStatus(), 
-                          process.getCurrentTaskIndex(), 
-                          process.getTotalTasks());
+                          definition.getCurrentStatus(), 
+                          definition.getCurrentProcessId() != null ? "Active" : "None", 
+                          "N/A");
                 
-                if ("COMPLETED".equals(process.getStatus()) || 
-                    "FAILED".equals(process.getStatus()) ||
-                    "STOPPED".equals(process.getStatus())) {
+                if ("COMPLETED".equals(definition.getCurrentStatus()) || 
+                    "FAILED".equals(definition.getCurrentStatus()) ||
+                    "STOPPED".equals(definition.getCurrentStatus())) {
                     break;
                 }
                 
