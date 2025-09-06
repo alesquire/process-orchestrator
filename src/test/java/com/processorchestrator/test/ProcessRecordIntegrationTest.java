@@ -40,6 +40,7 @@ public class ProcessRecordIntegrationTest {
     private ProcessRecordController processRecordController;
     private ProcessController processController;
     private ProcessOrchestrator processOrchestrator;
+    private ProcessTypeRegistry processTypeRegistry;
     private DBInitializer dbInitializer;
 
     @BeforeEach
@@ -85,13 +86,13 @@ public class ProcessRecordIntegrationTest {
         dbInitializer.initializeDatabase();
         
             // Create services
-            ProcessTypeRegistry registry = createProcessTypeRegistry();
-            processOrchestrator = new ProcessOrchestrator(dataSource, registry);
+            processTypeRegistry = createProcessTypeRegistry();
+            processOrchestrator = new ProcessOrchestrator(dataSource, processTypeRegistry);
             processOrchestrator.start(); // Start the orchestrator
 
             processRecordDAO = new ProcessRecordDAO(dataSource);
             processRecordController = new ProcessRecordController(processRecordDAO);
-            processController = new ProcessController(processRecordDAO, processOrchestrator);
+            processController = new ProcessController(processRecordDAO, processOrchestrator, processTypeRegistry);
     }
 
     @AfterEach
@@ -110,12 +111,18 @@ public class ProcessRecordIntegrationTest {
     private ProcessTypeRegistry createProcessTypeRegistry() {
         ProcessTypeRegistry registry = new ProcessTypeRegistry();
         
-        // Register a simple test process type
+        // Register a simple test process type (Windows compatible)
         ProcessType testProcessType = new ProcessType("test-process", "Test process for integration testing")
-                .addTask("task1", "echo 'Task 1 executed'", System.getProperty("java.io.tmpdir"), 30, 2)
-                .addTask("task2", "echo 'Task 2 executed'", System.getProperty("java.io.tmpdir"), 30, 2);
+                .addTask("task1", "cmd /c echo Task 1 executed", System.getProperty("java.io.tmpdir"), 30, 2)
+                .addTask("task2", "cmd /c echo Task 2 executed", System.getProperty("java.io.tmpdir"), 30, 2);
         
         registry.register(testProcessType);
+        
+        // Register a ping process type (Windows compatible)
+        ProcessType pingProcessType = new ProcessType("ping-process", "Process that performs ping operations")
+                .addTask("ping-task", "ping -n 5 8.8.8.8", System.getProperty("java.io.tmpdir"), 30, 2);
+        
+        registry.register(pingProcessType);
         
         return registry;
     }
@@ -431,5 +438,70 @@ public class ProcessRecordIntegrationTest {
             assertTrue(record.isScheduled(), "All returned records should be scheduled");
             assertFalse(record.isManual(), "All returned records should not be manual");
         }
+    }
+
+    @Test
+    void testMultipleProcessExecution() {
+        logger.info("Testing multiple process execution");
+        
+        // Create three different process records
+        String[] recordIds = {"multi-test-1", "multi-test-2", "multi-test-3"};
+        String[] processTypes = {"test-process", "test-process", "ping-process"};
+        String[] inputData = {
+            "input_file:/test/input1.json;output_dir:/test/output1",
+            "input_file:/test/input2.json;output_dir:/test/output2", 
+            "input_file:/test/input3.json;output_dir:/test/output3"
+        };
+        
+        // Create all three process records
+        for (int i = 0; i < recordIds.length; i++) {
+            ProcessRecordController.ProcessRecordResponse createResponse = 
+                processRecordController.createProcessRecord(recordIds[i], processTypes[i], inputData[i], null);
+            
+            assertTrue(createResponse.isSuccess(), "Process record creation should succeed for " + recordIds[i]);
+            assertEquals(recordIds[i], createResponse.getData().getId());
+            assertEquals(processTypes[i], createResponse.getData().getType());
+            assertEquals("PENDING", createResponse.getData().getCurrentStatus());
+        }
+        
+        // Start all three processes
+        ProcessController.ProcessStartResponse[] startResponses = new ProcessController.ProcessStartResponse[3];
+        for (int i = 0; i < recordIds.length; i++) {
+            startResponses[i] = processController.startProcess(recordIds[i]);
+            assertTrue(startResponses[i].isSuccess(), "Process start should succeed for " + recordIds[i]);
+            assertNotNull(startResponses[i].getProcessId());
+            assertNotNull(startResponses[i].getOrchestratorProcessId());
+            logger.info("Started process {} with orchestrator ID: {}", recordIds[i], startResponses[i].getOrchestratorProcessId());
+        }
+        
+        // Verify all processes are running
+        for (int i = 0; i < recordIds.length; i++) {
+            ProcessController.ProcessStateResponse stateResponse = processController.getProcessState(recordIds[i]);
+            assertTrue(stateResponse.isSuccess(), "Process state retrieval should succeed for " + recordIds[i]);
+            assertEquals("IN_PROGRESS", stateResponse.getProcessRecord().getCurrentStatus(), 
+                       "Process " + recordIds[i] + " should be IN_PROGRESS");
+        }
+        
+        // Wait a bit for processes to execute
+        try {
+            Thread.sleep(5000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            fail("Test interrupted while waiting for processes");
+        }
+        
+        // Check final states (some may have completed)
+        for (int i = 0; i < recordIds.length; i++) {
+            ProcessController.ProcessStateResponse finalStateResponse = processController.getProcessState(recordIds[i]);
+            assertTrue(finalStateResponse.isSuccess(), "Final state retrieval should succeed for " + recordIds[i]);
+            
+            String status = finalStateResponse.getProcessRecord().getCurrentStatus();
+            assertTrue(status.equals("IN_PROGRESS") || status.equals("COMPLETED"), 
+                      "Process " + recordIds[i] + " should be IN_PROGRESS or COMPLETED, but was " + status);
+            
+            logger.info("Process {} final status: {}", recordIds[i], status);
+        }
+        
+        logger.info("Multiple process execution test completed successfully");
     }
 }

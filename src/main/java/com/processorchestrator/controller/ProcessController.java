@@ -5,6 +5,8 @@ import com.processorchestrator.model.ProcessInputData;
 import com.processorchestrator.model.ProcessDetails;
 import com.processorchestrator.service.ProcessOrchestrator;
 import com.processorchestrator.model.TaskData;
+import com.processorchestrator.config.ProcessType;
+import com.processorchestrator.config.ProcessTypeRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,10 +26,12 @@ public class ProcessController {
     
     private final ProcessRecordDAO processRecordDAO;
     private final ProcessOrchestrator processOrchestrator;
+    private final ProcessTypeRegistry processTypeRegistry;
 
-    public ProcessController(ProcessRecordDAO processRecordDAO, ProcessOrchestrator processOrchestrator) {
+    public ProcessController(ProcessRecordDAO processRecordDAO, ProcessOrchestrator processOrchestrator, ProcessTypeRegistry processTypeRegistry) {
         this.processRecordDAO = processRecordDAO;
         this.processOrchestrator = processOrchestrator;
+        this.processTypeRegistry = processTypeRegistry;
     }
 
     // ==================== PROCESS EXECUTION MANAGEMENT ====================
@@ -63,6 +67,10 @@ public class ProcessController {
             
             // Update triggered_by field
             processRecordDAO.updateTriggeredBy(processRecordId, "MANUAL");
+            
+            // Update task progress with total number of tasks
+            ProcessType processType = processTypeRegistry.getProcessTypeOrThrow(record.getType());
+            processRecordDAO.updateTaskProgress(processRecordId, 0, processType.getTaskCount());
             
             // Start the process using the orchestrator
             String orchestratorProcessId = processOrchestrator.startProcess(record.getType(), inputData, processId, processRecordId);

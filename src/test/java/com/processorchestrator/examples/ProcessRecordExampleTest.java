@@ -90,7 +90,7 @@ public class ProcessRecordExampleTest {
         // Initialize process type registry and orchestrator
         processTypeRegistry = new ProcessTypeRegistry();
         processOrchestrator = new ProcessOrchestrator(dataSource, processTypeRegistry);
-        processController = new ProcessController(processRecordDAO, processOrchestrator);
+        processController = new ProcessController(processRecordDAO, processOrchestrator, processTypeRegistry);
         
         // Register process types
         registerProcessTypes();

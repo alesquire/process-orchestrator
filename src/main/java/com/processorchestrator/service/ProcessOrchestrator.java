@@ -17,6 +17,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -312,7 +315,11 @@ public class ProcessOrchestrator {
                 try {
                     processRecordDAO.updateStatus(processData.getProcessRecordId(), "COMPLETED", 
                                                 processData.getCompletedAt(), null);
-                    logger.info("Updated process record {} status to COMPLETED", processData.getProcessRecordId());
+                    // Update task progress to show all tasks completed
+                    processRecordDAO.updateTaskProgress(processData.getProcessRecordId(), 
+                                                      processData.getTotalTasks(), processData.getTotalTasks());
+                    logger.info("Updated process record {} status to COMPLETED with {}/{} tasks", 
+                               processData.getProcessRecordId(), processData.getTotalTasks(), processData.getTotalTasks());
                 } catch (Exception e) {
                     logger.error("Failed to update process record status: {}", processData.getProcessRecordId(), e);
                 }
@@ -323,6 +330,16 @@ public class ProcessOrchestrator {
         } else if (processData.hasMoreTasks()) {
             logger.info("Process {} moving to next task (index: {})", 
                       processData.getProcessId(), processData.getCurrentTaskIndex());
+            
+            // Update task progress in database
+            if (processData.getProcessRecordId() != null) {
+                try {
+                    processRecordDAO.updateTaskProgress(processData.getProcessRecordId(), 
+                                                      processData.getCurrentTaskIndex(), processData.getTotalTasks());
+                } catch (Exception e) {
+                    logger.error("Failed to update task progress: {}", processData.getProcessRecordId(), e);
+                }
+            }
             
             // Schedule next task execution
             schedulerClient.schedule(
@@ -421,6 +438,19 @@ public class ProcessOrchestrator {
                         processRecordId = taskData.getProcessId(); // fallback
                     }
                 }
+                
+                // Check if the process record still exists before trying to save the task
+                String checkSql = "SELECT COUNT(*) FROM process_record WHERE id = ?";
+                try (PreparedStatement checkStatement = connection.prepareStatement(checkSql)) {
+                    checkStatement.setString(1, processRecordId);
+                    try (ResultSet rs = checkStatement.executeQuery()) {
+                        if (rs.next() && rs.getInt(1) == 0) {
+                            logger.warn("Process record {} no longer exists, skipping task data save for task: {}", processRecordId, taskData.getTaskId());
+                            return; // Skip saving if process record doesn't exist
+                        }
+                    }
+                }
+                
                 statement.setString(2, processRecordId);
                 statement.setInt(3, 0); // task_index - we'll set this properly later
                 statement.setString(4, taskData.getName());

@@ -88,7 +88,7 @@ public class SingleTaskProcessTest {
         // Initialize process type registry and orchestrator
         processTypeRegistry = new ProcessTypeRegistry();
         processOrchestrator = new ProcessOrchestrator(dataSource, processTypeRegistry);
-        processController = new ProcessController(processRecordDAO, processOrchestrator);
+        processController = new ProcessController(processRecordDAO, processOrchestrator, processTypeRegistry);
         
         // Register the single task process type
         registerSingleTaskProcessType();
@@ -106,10 +106,10 @@ public class SingleTaskProcessTest {
     }
 
     /**
-     * Register a process type with one task that prints input text three times
+     * Register process types with tasks that print messages to console
      */
     private void registerSingleTaskProcessType() {
-        logger.info("Registering single task process type...");
+        logger.info("Registering process types...");
 
         // Create a process type with one task that prints special message and input text three times
         ProcessType singleTaskProcess = new ProcessType("single-print-task", "Process that prints special message and input text three times")
@@ -117,6 +117,14 @@ public class SingleTaskProcessTest {
         
         processTypeRegistry.register(singleTaskProcess);
         logger.info("Registered single-print-task with {} tasks", singleTaskProcess.getTaskCount());
+
+        // Create a second process type with two tasks that print different messages
+        ProcessType dualTaskProcess = new ProcessType("dual-print-task", "Process with two tasks that print different messages")
+                .addTask("print-greeting", "python -c \"print('=== TASK 1: GREETING ==='); print('Hello from Task 1!'); print('Input text: ${input_text}'); print('Task 1 completed successfully!')\"", System.getProperty("java.io.tmpdir"), 30, 2)
+                .addTask("print-farewell", "python -c \"print('=== TASK 2: FAREWELL ==='); print('Goodbye from Task 2!'); print('Processing: ${input_text}'); print('Task 2 completed successfully!')\"", System.getProperty("java.io.tmpdir"), 30, 2);
+        
+        processTypeRegistry.register(dualTaskProcess);
+        logger.info("Registered dual-print-task with {} tasks", dualTaskProcess.getTaskCount());
     }
 
     @Test
@@ -257,6 +265,155 @@ public class SingleTaskProcessTest {
         
         logger.info("=== Single Task Process Execution Test Completed Successfully ===");
         logger.info("Process '{}' successfully printed '{}' three times", processId, randomText);
+    }
+
+    @Test
+    void testDualTaskProcessExecution() {
+        logger.info("=== Starting Dual Task Process Execution Test ===");
+
+        // Clean up any existing test data
+        dbInitializer.cleanupTestData();
+
+        // ==================== STEP 1: GENERATE RANDOM INPUT TEXT ====================
+        
+        String randomText = generateRandomText();
+        logger.info("Generated random input text: '{}'", randomText);
+
+        // ==================== STEP 2: CREATE PROCESS RECORD ====================
+        
+        String processId = "dual-task-test-" + System.currentTimeMillis();
+        String inputData = String.format("{\"input_text\": \"%s\"}", randomText);
+        
+        logger.info("Step 1: Creating ProcessRecord with random input text");
+        ProcessRecordController.ProcessRecordResponse createResponse = processRecordController.createProcessRecord(
+            processId, "dual-print-task", inputData, null);
+        
+        assertTrue(createResponse.isSuccess(), "Process record creation should succeed");
+        assertEquals(processId, createResponse.getData().getId());
+        assertEquals("dual-print-task", createResponse.getData().getType());
+        assertEquals(inputData, createResponse.getData().getInputData());
+        assertEquals("PENDING", createResponse.getData().getCurrentStatus());
+        logger.info("✓ Created ProcessRecord: {} with input: '{}'", processId, randomText);
+
+        // ==================== STEP 3: VERIFY INITIAL STATE ====================
+        
+        logger.info("Step 2: Verifying initial process state");
+        ProcessController.ProcessStateResponse stateResponse = processController.getProcessState(processId);
+        
+        assertTrue(stateResponse.isSuccess(), "Should be able to get process state");
+        ProcessDetails initialDetails = stateResponse.getProcessDetails();
+        
+        assertEquals("PENDING", initialDetails.getCurrentStatus());
+        assertEquals(0, initialDetails.getCurrentTaskIndex());
+        assertEquals(0, initialDetails.getTotalTasks());
+        assertNull(initialDetails.getStartedWhen());
+        assertNull(initialDetails.getCompletedWhen());
+        logger.info("✓ Initial state verified: {}, task {}/{}, not started", 
+                   initialDetails.getCurrentStatus(), 
+                   initialDetails.getCurrentTaskIndex(), 
+                   initialDetails.getTotalTasks());
+
+        // ==================== STEP 4: START PROCESS ====================
+        
+        logger.info("Step 3: Starting process execution");
+        ProcessController.ProcessStartResponse startResponse = processController.startProcess(processId);
+        
+        assertTrue(startResponse.isSuccess(), "Process start should succeed");
+        assertNotNull(startResponse.getOrchestratorProcessId());
+        logger.info("✓ Process started successfully with orchestrator ID: {}", startResponse.getOrchestratorProcessId());
+
+        // ==================== STEP 5: MONITOR EXECUTION ====================
+        
+        logger.info("Step 4: Monitoring state transitions during execution");
+        
+        // Wait for process to start
+        try {
+            Thread.sleep(2000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            fail("Test interrupted while waiting for process to start");
+        }
+        
+        ProcessController.ProcessStateResponse runningResponse = processController.getProcessState(processId);
+        assertTrue(runningResponse.isSuccess(), "Should be able to get process state");
+        ProcessDetails runningDetails = runningResponse.getProcessDetails();
+        
+        assertTrue(runningDetails.isRunning(), "Process should be running");
+        assertNotNull(runningDetails.getStartedWhen());
+        logger.info("✓ Process is running: {}, started at {}", 
+                   runningDetails.getCurrentStatus(), runningDetails.getStartedWhen());
+
+        // ==================== STEP 6: WAIT FOR COMPLETION ====================
+        
+        logger.info("Step 5: Waiting for process completion");
+        
+        ProcessDetails finalDetails = null;
+        int maxWaitSeconds = 30;
+        int checkIntervalMs = 1000;
+        int checks = 0;
+        
+        while (checks < maxWaitSeconds) {
+            ProcessController.ProcessStateResponse checkResponse = processController.getProcessState(processId);
+            assertTrue(checkResponse.isSuccess(), "Should be able to get process state");
+            ProcessDetails checkDetails = checkResponse.getProcessDetails();
+            
+            logger.info("Status check {}: {}", checks + 1, checkDetails.getCurrentStatus());
+            
+            if ("COMPLETED".equals(checkDetails.getCurrentStatus())) {
+                finalDetails = checkDetails;
+                break;
+            } else if ("FAILED".equals(checkDetails.getCurrentStatus())) {
+                fail("Process failed: " + checkDetails.getLastErrorMessage());
+            }
+            
+            try {
+                Thread.sleep(checkIntervalMs);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                fail("Test interrupted while waiting for process completion");
+            }
+            checks++;
+        }
+        
+        assertNotNull(finalDetails, "Process should have completed within " + maxWaitSeconds + " seconds");
+        logger.info("✓ Process completed successfully!");
+
+        // ==================== STEP 7: VERIFY FINAL STATE ====================
+        
+        logger.info("Step 6: Verifying final process state");
+        ProcessController.ProcessStateResponse finalResponse = processController.getProcessState(processId);
+        
+        assertTrue(finalResponse.isSuccess(), "Should be able to get final process state");
+        ProcessDetails finalStateDetails = finalResponse.getProcessDetails();
+        
+        assertEquals("COMPLETED", finalStateDetails.getCurrentStatus());
+        assertEquals(2, finalStateDetails.getTotalTasks());
+        assertEquals(2, finalStateDetails.getCurrentTaskIndex()); // Should be 2 (0-indexed, so 2 means both tasks completed)
+        assertNotNull(finalStateDetails.getStartedWhen());
+        assertNotNull(finalStateDetails.getCompletedWhen());
+        logger.info("✓ Final state verified: {}, started at {}, completed at {}", 
+                   finalStateDetails.getCurrentStatus(), 
+                   finalStateDetails.getStartedWhen(), 
+                   finalStateDetails.getCompletedWhen());
+
+        // ==================== STEP 8: VERIFY EXECUTION TIME ====================
+        
+        logger.info("Step 7: Verifying execution time");
+        long executionTimeMs = finalStateDetails.getCompletedWhen().toEpochMilli() - 
+                              finalStateDetails.getStartedWhen().toEpochMilli();
+        long executionTimeSeconds = executionTimeMs / 1000;
+        
+        assertTrue(executionTimeSeconds > 0, "Execution time should be positive");
+        assertTrue(executionTimeSeconds < 30, "Execution should complete within 30 seconds");
+        logger.info("✓ Execution completed in {} seconds", executionTimeSeconds);
+
+        // ==================== STEP 9: CLEANUP ====================
+        
+        logger.info("Step 8: Cleaning up test data");
+        dbInitializer.cleanupTestData();
+        
+        logger.info("=== Dual Task Process Execution Test Completed Successfully ===");
+        logger.info("Process '{}' successfully executed both greeting and farewell tasks with input: '{}'", processId, randomText);
     }
 
     @Test
