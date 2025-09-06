@@ -111,17 +111,17 @@ public class ProcessRecordExampleTest {
 
         // Process Type 2: Two Task Process  
         ProcessType twoTaskProcess = new ProcessType("two-task-process", "Process with two tasks")
-                .addTask("extract", "python scripts/extract.py ${input_file} ${output_dir}", System.getProperty("java.io.tmpdir"), 45, 2)
-                .addTask("transform", "python scripts/transform.py ${output_dir}/extracted.json ${output_dir}/transformed.json", System.getProperty("java.io.tmpdir"), 60, 3);
+                .addTask("extract", "java -cp " + System.getProperty("user.dir") + "/target/classes com.processorchestrator.util.MessagePrinter \"Extracting data from ${input_file} to ${output_dir}\"", System.getProperty("java.io.tmpdir"), 45, 2)
+                .addTask("transform", "java -cp " + System.getProperty("user.dir") + "/target/classes com.processorchestrator.util.MessagePrinter \"Transforming data from ${output_dir}/extracted.json to ${output_dir}/transformed.json\"", System.getProperty("java.io.tmpdir"), 60, 3);
         
         processTypeRegistry.register(twoTaskProcess);
         logger.info("Registered two-task-process with {} tasks", twoTaskProcess.getTaskCount());
 
         // Process Type 3: Three Task Process
         ProcessType threeTaskProcess = new ProcessType("three-task-process", "Process with three tasks")
-                .addTask("load", "python scripts/load_data.py ${input_file} ${output_dir}/loaded.json", System.getProperty("java.io.tmpdir"), 30, 2)
-                .addTask("process", "python scripts/process_data.py ${output_dir}/loaded.json ${output_dir}/processed.json", System.getProperty("java.io.tmpdir"), 60, 3)
-                .addTask("analyze", "python scripts/analyze_data.py ${output_dir}/processed.json ${output_dir}/analysis.json", System.getProperty("java.io.tmpdir"), 45, 2);
+                .addTask("load", "java -cp " + System.getProperty("user.dir") + "/target/classes com.processorchestrator.util.MessagePrinter \"Loading data from ${input_file} to ${output_dir}/loaded.json\"", System.getProperty("java.io.tmpdir"), 30, 2)
+                .addTask("process", "java -cp " + System.getProperty("user.dir") + "/target/classes com.processorchestrator.util.MessagePrinter \"Processing data from ${output_dir}/loaded.json to ${output_dir}/processed.json\"", System.getProperty("java.io.tmpdir"), 60, 3)
+                .addTask("analyze", "java -cp " + System.getProperty("user.dir") + "/target/classes com.processorchestrator.util.MessagePrinter \"Analyzing data from ${output_dir}/processed.json to ${output_dir}/analysis.json\"", System.getProperty("java.io.tmpdir"), 45, 2);
         
         processTypeRegistry.register(threeTaskProcess);
         logger.info("Registered three-task-process with {} tasks", threeTaskProcess.getTaskCount());

@@ -111,17 +111,17 @@ public class SingleTaskProcessTest {
     private void registerSingleTaskProcessType() {
         logger.info("Registering process types...");
 
-        // Create a process type with one task that prints special message and input text three times
-        ProcessType singleTaskProcess = new ProcessType("single-print-task", "Process that prints special message and input text three times")
-                .addTask("print-text", "python -c \"print('!!!THIS IS A TEST MESSAGE!!!'); import sys; text='${input_text}'; [print(f'Print {i+1}: {text}') for i in range(3)]\"", System.getProperty("java.io.tmpdir"), 30, 2);
+        // Create a process type with one task that prints special message
+        ProcessType singleTaskProcess = new ProcessType("single-print-task", "Process that prints special message")
+                .addTask("print-text", "java -cp " + System.getProperty("user.dir") + "/target/classes com.processorchestrator.util.MessagePrinter \"!!!THIS IS A TEST MESSAGE!!!\"", System.getProperty("java.io.tmpdir"), 30, 2);
         
         processTypeRegistry.register(singleTaskProcess);
         logger.info("Registered single-print-task with {} tasks", singleTaskProcess.getTaskCount());
 
         // Create a second process type with two tasks that print different messages
         ProcessType dualTaskProcess = new ProcessType("dual-print-task", "Process with two tasks that print different messages")
-                .addTask("print-greeting", "python -c \"print('=== TASK 1: GREETING ==='); print('Hello from Task 1!'); print('Input text: ${input_text}'); print('Task 1 completed successfully!')\"", System.getProperty("java.io.tmpdir"), 30, 2)
-                .addTask("print-farewell", "python -c \"print('=== TASK 2: FAREWELL ==='); print('Goodbye from Task 2!'); print('Processing: ${input_text}'); print('Task 2 completed successfully!')\"", System.getProperty("java.io.tmpdir"), 30, 2);
+                .addTask("print-greeting", "java -cp " + System.getProperty("user.dir") + "/target/classes com.processorchestrator.util.MessagePrinter \"=== TASK 1: GREETING === Hello from Task 1!\"", System.getProperty("java.io.tmpdir"), 30, 2)
+                .addTask("print-farewell", "java -cp " + System.getProperty("user.dir") + "/target/classes com.processorchestrator.util.MessagePrinter \"=== TASK 2: FAREWELL === Goodbye from Task 2!\"", System.getProperty("java.io.tmpdir"), 30, 2);
         
         processTypeRegistry.register(dualTaskProcess);
         logger.info("Registered dual-print-task with {} tasks", dualTaskProcess.getTaskCount());

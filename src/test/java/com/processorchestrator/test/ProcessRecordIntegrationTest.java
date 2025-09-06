@@ -113,8 +113,8 @@ public class ProcessRecordIntegrationTest {
         
         // Register a simple test process type (Windows compatible)
         ProcessType testProcessType = new ProcessType("test-process", "Test process for integration testing")
-                .addTask("task1", "cmd /c echo Task 1 executed", System.getProperty("java.io.tmpdir"), 30, 2)
-                .addTask("task2", "cmd /c echo Task 2 executed", System.getProperty("java.io.tmpdir"), 30, 2);
+                .addTask("task1", "java -cp " + System.getProperty("user.dir") + "/target/classes com.processorchestrator.util.MessagePrinter \"Task 1 executed\"", System.getProperty("java.io.tmpdir"), 30, 2)
+                .addTask("task2", "java -cp " + System.getProperty("user.dir") + "/target/classes com.processorchestrator.util.MessagePrinter \"Task 2 executed\"", System.getProperty("java.io.tmpdir"), 30, 2);
         
         registry.register(testProcessType);
         

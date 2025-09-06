@@ -113,7 +113,7 @@ public class ProcessOrchestrator {
         
         // Schedule the process for immediate execution
         schedulerClient.schedule(
-            processTask.instance(processId, processData),
+            processTask.instance("process-" + processId, processData),
             Instant.now()
         );
         
@@ -168,7 +168,7 @@ public class ProcessOrchestrator {
         
         // Schedule CLI task execution
         schedulerClient.schedule(
-            cliTask.instance(currentTask.getTaskId(), currentTask),
+            cliTask.instance("task-" + currentTask.getTaskId(), currentTask),
             Instant.now()
         );
     }
@@ -228,7 +228,7 @@ public class ProcessOrchestrator {
                     
                     // Schedule retry
                     schedulerClient.schedule(
-                        cliTask.instance(taskId, taskData),
+                        cliTask.instance("task-" + taskId, taskData),
                         Instant.now().plusSeconds(30) // Retry after 30 seconds
                     );
                 } else {
@@ -349,7 +349,7 @@ public class ProcessOrchestrator {
             
             // Schedule next task execution
             schedulerClient.schedule(
-                processTask.instance(processData.getProcessId(), processData),
+                processTask.instance("process-" + processData.getProcessId(), processData),
                 Instant.now()
             );
         }
@@ -611,7 +611,7 @@ public class ProcessOrchestrator {
         try {
             // db-scheduler automatically cleans up completed tasks from scheduled_tasks table
             // We just need to ensure the scheduler knows the process is complete
-            logger.info("Process {} completed - db-scheduler will automatically clean up scheduled_tasks records", processId);
+            logger.info("Process {} completed - db-scheduler will automatically clean up scheduled_tasks records for process-{}", processId, processId);
         } catch (Exception e) {
             logger.error("Error during process completion cleanup for: {}", processId, e);
         }
@@ -625,7 +625,7 @@ public class ProcessOrchestrator {
         try {
             // db-scheduler automatically preserves failed tasks in scheduled_tasks table
             // This allows for debugging failed processes
-            logger.info("Process {} failed - db-scheduler will preserve failed scheduled_tasks records for debugging", processId);
+            logger.info("Process {} failed - db-scheduler will preserve failed scheduled_tasks records for process-{} for debugging", processId, processId);
         } catch (Exception e) {
             logger.error("Error during failed process cleanup for: {}", processId, e);
         }
@@ -638,7 +638,7 @@ public class ProcessOrchestrator {
     private void cleanupScheduledTaskForCompletedTask(String taskId) {
         try {
             // db-scheduler automatically cleans up completed tasks from scheduled_tasks table
-            logger.debug("Task {} completed - db-scheduler will automatically clean up scheduled_tasks record", taskId);
+            logger.debug("Task {} completed - db-scheduler will automatically clean up scheduled_tasks record for task-{}", taskId, taskId);
         } catch (Exception e) {
             logger.error("Error during task completion cleanup for: {}", taskId, e);
         }
