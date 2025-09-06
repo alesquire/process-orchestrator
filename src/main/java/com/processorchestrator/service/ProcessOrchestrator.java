@@ -34,6 +34,7 @@ public class ProcessOrchestrator {
     private final SchedulerClient schedulerClient;
     private final ProcessTypeRegistry processTypeRegistry;
     private final CLITaskExecutor taskExecutor;
+    private final ProcessResultService resultService;
     
     // Task definitions for db-scheduler
     private final OneTimeTask<ProcessData> processTask;
@@ -46,6 +47,7 @@ public class ProcessOrchestrator {
     public ProcessOrchestrator(DataSource dataSource, ProcessTypeRegistry processTypeRegistry) {
         this.processTypeRegistry = processTypeRegistry;
         this.taskExecutor = new CLITaskExecutor();
+        this.resultService = new ProcessResultService(dataSource);
         
         // Create db-scheduler tasks
         this.processTask = Tasks.oneTime(PROCESS_TASK_NAME, ProcessData.class)
@@ -112,11 +114,14 @@ public class ProcessOrchestrator {
         logger.info("Executing process: {}", processId);
         
         try {
-            // Mark process as started
-            processData.markAsStarted();
-            
-            // Execute current task
-            executeCurrentTask(processData, context);
+        // Mark process as started
+        processData.markAsStarted();
+        
+        // Persist process data
+        resultService.saveProcessData(processData);
+        
+        // Execute current task
+        executeCurrentTask(processData, context);
             
         } catch (Exception e) {
             logger.error("Error executing process: {}", processId, e);
@@ -138,6 +143,9 @@ public class ProcessOrchestrator {
         
         // Mark task as started
         currentTask.markAsStarted();
+        
+        // Persist task data
+        resultService.saveTaskData(currentTask);
         
         // Schedule CLI task execution
         schedulerClient.schedule(
@@ -166,6 +174,9 @@ public class ProcessOrchestrator {
                 logger.info("CLI task {} completed successfully", taskId);
                 taskData.markAsCompleted(result.getExitCode(), result.getOutput());
                 
+                // Persist task results
+                resultService.saveTaskData(taskData);
+                
                 // Update process context with results
                 updateProcessContext(taskData, result);
                 
@@ -176,12 +187,18 @@ public class ProcessOrchestrator {
                 logger.warn("CLI task {} failed: {}", taskId, result.getErrorMessage());
                 taskData.markAsFailed(result.getErrorMessage());
                 
+                // Persist task failure
+                resultService.saveTaskData(taskData);
+                
                 // Check if we can retry
                 if (taskData.canRetry()) {
                     logger.info("Retrying CLI task {} (attempt {}/{})", taskId, 
                               taskData.getRetryCount() + 1, taskData.getMaxRetries());
                     taskData.incrementRetryCount();
                     taskData.setStatus(TaskStatus.PENDING);
+                    
+                    // Persist retry attempt
+                    resultService.saveTaskData(taskData);
                     
                     // Schedule retry
                     schedulerClient.schedule(
@@ -328,5 +345,33 @@ public class ProcessOrchestrator {
     public void stop() {
         scheduler.stop();
         logger.info("Process Orchestrator stopped");
+    }
+
+    /**
+     * Get process data by process ID
+     */
+    public ProcessData getProcess(String processId) {
+        return resultService.getProcessData(processId);
+    }
+
+    /**
+     * Get all tasks for a process
+     */
+    public List<TaskData> getProcessTasks(String processId) {
+        return resultService.getProcessTasks(processId);
+    }
+
+    /**
+     * Get all processes
+     */
+    public List<ProcessData> getAllProcesses() {
+        return resultService.getAllProcesses();
+    }
+
+    /**
+     * Get processes by status
+     */
+    public List<ProcessData> getProcessesByStatus(ProcessStatus status) {
+        return resultService.getProcessesByStatus(status);
     }
 }

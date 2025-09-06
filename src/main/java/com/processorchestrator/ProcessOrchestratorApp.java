@@ -65,6 +65,15 @@ public class ProcessOrchestratorApp {
         
         processTypeRegistry.register(etlPipeline);
         
+        // Complete Data Processing Pipeline - Load, Process, Generate, Analyze
+        ProcessType completeDataProcessingPipeline = new ProcessType("data-processing-pipeline", "Complete data processing pipeline")
+                .addTask("load", "python scripts/load_data.py ${input_file} ${output_dir}/loaded_data.json", "/data", 30, 2)
+                .addTask("process", "python scripts/process_data.py ${output_dir}/loaded_data.json ${output_dir}/processed_data.json", "/data", 60, 3)
+                .addTask("generate", "python scripts/generate_report.py ${output_dir}/processed_data.json ${output_dir}/report.html", "/data", 45, 2)
+                .addTask("analyze", "python scripts/analyze_results.py ${output_dir}/report.html ${output_dir}/analysis.json", "/data", 30, 2);
+        
+        processTypeRegistry.register(completeDataProcessingPipeline);
+        
         logger.info("Registered {} process types", processTypeRegistry.getAllProcessTypes().size());
     }
 
@@ -148,5 +157,122 @@ public class ProcessOrchestratorApp {
 
     public ProcessTypeRegistry getProcessTypeRegistry() {
         return processTypeRegistry;
+    }
+
+    /**
+     * Example method demonstrating how to start a data processing pipeline
+     */
+    public void runDataProcessingExample() {
+        logger.info("Running Data Processing Pipeline Example");
+        
+        // Create sample input data
+        ProcessInputData inputData = new ProcessInputData();
+        inputData.setInputFile("/data/sample_input.json");
+        inputData.setOutputDir("/data/output");
+        inputData.setUserId("user123");
+        inputData.addConfig("batch_size", "100");
+        inputData.addConfig("parallel_processing", "false");
+        inputData.addConfig("quality_threshold", "95.0");
+        inputData.addMetadata("source_system", "legacy_database");
+        inputData.addMetadata("data_type", "customer_records");
+        inputData.addMetadata("priority", "high");
+        
+        // Start the data processing pipeline
+        String processId = processOrchestrator.startProcess("data-processing-pipeline", inputData);
+        logger.info("Started data processing pipeline with ID: {}", processId);
+        
+        // Monitor the process (in a real application, this would be done asynchronously)
+        monitorProcess(processId);
+        
+        // Display results
+        displayProcessResults(processId);
+    }
+
+    private void monitorProcess(String processId) {
+        logger.info("Monitoring process: {}", processId);
+        
+        int maxWaitTime = 300; // 5 minutes max wait
+        int waitTime = 0;
+        
+        while (waitTime < maxWaitTime) {
+            try {
+                var process = processOrchestrator.getProcess(processId);
+                if (process != null) {
+                    logger.info("Process Status: {} (Task {}/{})", 
+                              process.getStatus(), 
+                              process.getCurrentTaskIndex(), 
+                              process.getTotalTasks());
+                    
+                    if (process.getStatus() == com.processorchestrator.model.ProcessStatus.COMPLETED || 
+                        process.getStatus() == com.processorchestrator.model.ProcessStatus.FAILED) {
+                        break;
+                    }
+                }
+                
+                Thread.sleep(5000); // Wait 5 seconds
+                waitTime += 5;
+                
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        
+        if (waitTime >= maxWaitTime) {
+            logger.warn("Process monitoring timed out after {} seconds", maxWaitTime);
+        }
+    }
+
+    private void displayProcessResults(String processId) {
+        logger.info("=== PROCESS RESULTS ===");
+        
+        // Get process data
+        var process = processOrchestrator.getProcess(processId);
+        if (process != null) {
+            logger.info("Process ID: {}", process.getProcessId());
+            logger.info("Process Type: {}", process.getProcessType());
+            logger.info("Status: {}", process.getStatus());
+            logger.info("Started At: {}", process.getStartedAt());
+            logger.info("Completed At: {}", process.getCompletedAt());
+            logger.info("Error Message: {}", process.getErrorMessage());
+        }
+        
+        // Get all tasks
+        var tasks = processOrchestrator.getProcessTasks(processId);
+        logger.info("\n=== TASK RESULTS ===");
+        
+        for (var task : tasks) {
+            logger.info("Task: {} ({})", task.getName(), task.getStatus());
+            logger.info("  Command: {}", task.getCommand());
+            logger.info("  Started At: {}", task.getStartedAt());
+            logger.info("  Completed At: {}", task.getCompletedAt());
+            logger.info("  Exit Code: {}", task.getExitCode());
+            logger.info("  Retry Count: {}/{}", task.getRetryCount(), task.getMaxRetries());
+            
+            if (task.getOutput() != null && !task.getOutput().isEmpty()) {
+                logger.info("  Output: {}", task.getOutput());
+            }
+            
+            if (task.getErrorMessage() != null && !task.getErrorMessage().isEmpty()) {
+                logger.info("  Error: {}", task.getErrorMessage());
+            }
+            
+            logger.info("");
+        }
+        
+        // Display summary
+        logger.info("=== SUMMARY ===");
+        long completedTasks = tasks.stream()
+                .mapToLong(t -> t.getStatus() == com.processorchestrator.model.TaskStatus.COMPLETED ? 1 : 0)
+                .sum();
+        long failedTasks = tasks.stream()
+                .mapToLong(t -> t.getStatus() == com.processorchestrator.model.TaskStatus.FAILED ? 1 : 0)
+                .sum();
+        
+        logger.info("Total Tasks: {}", tasks.size());
+        logger.info("Completed: {}", completedTasks);
+        logger.info("Failed: {}", failedTasks);
+        logger.info("Success Rate: {}%", 
+                  tasks.size() > 0 ? (completedTasks * 100 / tasks.size()) : 0);
     }
 }
