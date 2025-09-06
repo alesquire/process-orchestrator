@@ -102,6 +102,13 @@ public class TaskData implements Serializable {
         this.completedAt = Instant.now();
     }
 
+    public void markAsFailed(String errorMessage, int exitCode) {
+        this.status = "FAILED";
+        this.errorMessage = errorMessage;
+        this.exitCode = exitCode;
+        this.completedAt = Instant.now();
+    }
+
     public void markAsStarted() {
         this.status = "IN_PROGRESS";
         this.startedAt = Instant.now();

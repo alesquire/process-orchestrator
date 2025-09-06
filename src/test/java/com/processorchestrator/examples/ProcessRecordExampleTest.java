@@ -104,24 +104,24 @@ public class ProcessRecordExampleTest {
 
         // Process Type 1: Single Task Process
         ProcessType singleTaskProcess = new ProcessType("single-task-process", "Process with one task")
-                .addTask("validate", "python scripts/validate.py ${input_file}", "/data", 30, 2);
+                .addTask("validate", "python scripts/validate.py ${input_file}", System.getProperty("java.io.tmpdir"), 30, 2);
         
         processTypeRegistry.register(singleTaskProcess);
         logger.info("Registered single-task-process with {} tasks", singleTaskProcess.getTaskCount());
 
         // Process Type 2: Two Task Process  
         ProcessType twoTaskProcess = new ProcessType("two-task-process", "Process with two tasks")
-                .addTask("extract", "python scripts/extract.py ${input_file} ${output_dir}", "/data", 45, 2)
-                .addTask("transform", "python scripts/transform.py ${output_dir}/extracted.json ${output_dir}/transformed.json", "/data", 60, 3);
+                .addTask("extract", "python scripts/extract.py ${input_file} ${output_dir}", System.getProperty("java.io.tmpdir"), 45, 2)
+                .addTask("transform", "python scripts/transform.py ${output_dir}/extracted.json ${output_dir}/transformed.json", System.getProperty("java.io.tmpdir"), 60, 3);
         
         processTypeRegistry.register(twoTaskProcess);
         logger.info("Registered two-task-process with {} tasks", twoTaskProcess.getTaskCount());
 
         // Process Type 3: Three Task Process
         ProcessType threeTaskProcess = new ProcessType("three-task-process", "Process with three tasks")
-                .addTask("load", "python scripts/load_data.py ${input_file} ${output_dir}/loaded.json", "/data", 30, 2)
-                .addTask("process", "python scripts/process_data.py ${output_dir}/loaded.json ${output_dir}/processed.json", "/data", 60, 3)
-                .addTask("analyze", "python scripts/analyze_data.py ${output_dir}/processed.json ${output_dir}/analysis.json", "/data", 45, 2);
+                .addTask("load", "python scripts/load_data.py ${input_file} ${output_dir}/loaded.json", System.getProperty("java.io.tmpdir"), 30, 2)
+                .addTask("process", "python scripts/process_data.py ${output_dir}/loaded.json ${output_dir}/processed.json", System.getProperty("java.io.tmpdir"), 60, 3)
+                .addTask("analyze", "python scripts/analyze_data.py ${output_dir}/processed.json ${output_dir}/analysis.json", System.getProperty("java.io.tmpdir"), 45, 2);
         
         processTypeRegistry.register(threeTaskProcess);
         logger.info("Registered three-task-process with {} tasks", threeTaskProcess.getTaskCount());
@@ -142,7 +142,7 @@ public class ProcessRecordExampleTest {
 
         // Create ProcessRecord 1: Single Task Process
         String processId1 = "example-single-task-" + System.currentTimeMillis();
-        String inputData1 = "{\"input_file\": \"/data/sample.csv\", \"validation_rules\": \"strict\"}";
+        String inputData1 = "{\"input_file\": \"" + System.getProperty("java.io.tmpdir") + "/sample.csv\", \"validation_rules\": \"strict\"}";
         
         ProcessRecordController.ProcessRecordResponse response1 = processRecordController.createProcessRecord(
             processId1, "single-task-process", inputData1, null);
@@ -156,7 +156,7 @@ public class ProcessRecordExampleTest {
 
         // Create ProcessRecord 2: Two Task Process
         String processId2 = "example-two-task-" + System.currentTimeMillis();
-        String inputData2 = "{\"input_file\": \"/data/raw_data.json\", \"output_dir\": \"/data/output\", \"format\": \"json\"}";
+        String inputData2 = "{\"input_file\": \"" + System.getProperty("java.io.tmpdir") + "/raw_data.json\", \"output_dir\": \"" + System.getProperty("java.io.tmpdir") + "/output\", \"format\": \"json\"}";
         
         ProcessRecordController.ProcessRecordResponse response2 = processRecordController.createProcessRecord(
             processId2, "two-task-process", inputData2, "0 2 * * *"); // Scheduled for 2 AM daily
@@ -171,7 +171,7 @@ public class ProcessRecordExampleTest {
 
         // Create ProcessRecord 3: Three Task Process
         String processId3 = "example-three-task-" + System.currentTimeMillis();
-        String inputData3 = "{\"input_file\": \"/data/large_dataset.csv\", \"output_dir\": \"/data/results\", \"analysis_type\": \"comprehensive\"}";
+        String inputData3 = "{\"input_file\": \"" + System.getProperty("java.io.tmpdir") + "/large_dataset.csv\", \"output_dir\": \"" + System.getProperty("java.io.tmpdir") + "/results\", \"analysis_type\": \"comprehensive\"}";
         
         ProcessRecordController.ProcessRecordResponse response3 = processRecordController.createProcessRecord(
             processId3, "three-task-process", inputData3, null);

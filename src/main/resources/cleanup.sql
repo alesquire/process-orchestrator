@@ -13,6 +13,12 @@ DELETE FROM tasks WHERE process_record_id LIKE 'test-%'
    OR process_record_id LIKE 'execution-test-%'
    OR process_record_id LIKE 'scheduled-%'
    OR process_record_id LIKE 'duplicate-test-%'
+   OR process_record_id LIKE 'error-test-%'
+   OR process_record_id LIKE 'example-%'
+   OR process_record_id LIKE 'single-task-test-%'
+   OR process_record_id LIKE 'dual-task-test-%'
+   OR process_record_id LIKE 'ping-test-%'
+   OR process_record_id LIKE 'concurrent-test-%'
    OR process_record_id = 'running-record';
 
 -- Delete from process_record table
@@ -27,7 +33,15 @@ DELETE FROM process_record WHERE id LIKE 'test-%'
    OR id LIKE 'execution-test-%'
    OR id LIKE 'scheduled-%'
    OR id LIKE 'duplicate-test-%'
+   OR id LIKE 'error-test-%'
+   OR id LIKE 'example-%'
+   OR id LIKE 'single-task-test-%'
+   OR id LIKE 'dual-task-test-%'
+   OR id LIKE 'ping-test-%'
+   OR id LIKE 'concurrent-test-%'
    OR id = 'running-record';
 
 -- Clean up db-scheduler tasks
-DELETE FROM scheduled_tasks WHERE task_name LIKE 'process-orchestrator-task-%';
+DELETE FROM scheduled_tasks WHERE task_name LIKE 'process-orchestrator-task-%'
+   OR task_name = 'cli-execution'
+   OR task_name = 'process-execution';

@@ -31,7 +31,10 @@ public class CLITaskExecutor {
         
         // Set working directory if specified
         if (taskData.getWorkingDirectory() != null && !taskData.getWorkingDirectory().trim().isEmpty()) {
+            logger.debug("Setting working directory to: '{}'", taskData.getWorkingDirectory());
             processBuilder.directory(new java.io.File(taskData.getWorkingDirectory()));
+        } else {
+            logger.debug("No working directory specified, using current directory");
         }
         
         // Redirect error stream to output stream

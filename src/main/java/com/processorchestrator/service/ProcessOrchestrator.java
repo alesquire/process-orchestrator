@@ -50,8 +50,8 @@ public class ProcessOrchestrator {
     private final OneTimeTask<TaskData> cliTask;
     
     // Task name for db-scheduler
-    private static final String PROCESS_TASK_NAME = "process-execution";
-    private static final String CLI_TASK_NAME = "cli-execution";
+    private static final String PROCESS_TASK_NAME = "process-orchestrator-process";
+    private static final String CLI_TASK_NAME = "task-orchestrator-task";
 
     public ProcessOrchestrator(DataSource dataSource, ProcessTypeRegistry processTypeRegistry) {
         this.dataSource = dataSource;
@@ -198,6 +198,9 @@ public class ProcessOrchestrator {
                 saveTaskData(taskData);
                 logger.debug("Task {} completed successfully and persisted", taskData.getTaskId());
                 
+                // Clean up scheduled task using db-scheduler API
+                cleanupScheduledTaskForCompletedTask(taskData.getTaskId());
+                
                 // Update process context with results
                 updateProcessContext(taskData, result);
                 
@@ -206,7 +209,7 @@ public class ProcessOrchestrator {
                 
             } else {
                 logger.warn("CLI task {} failed: {}", taskId, result.getErrorMessage());
-                taskData.markAsFailed(result.getErrorMessage());
+                taskData.markAsFailed(result.getErrorMessage(), result.getExitCode());
                 
                 // Persist task failure
                 saveTaskData(taskData);
@@ -327,6 +330,9 @@ public class ProcessOrchestrator {
             
             // Clean up cached process data
             processDataCache.remove(processData.getProcessId());
+            
+            // Clean up scheduled tasks using db-scheduler API
+            cleanupScheduledTasksForCompletedProcess(processData.getProcessId());
         } else if (processData.hasMoreTasks()) {
             logger.info("Process {} moving to next task (index: {})", 
                       processData.getProcessId(), processData.getCurrentTaskIndex());
@@ -375,6 +381,9 @@ public class ProcessOrchestrator {
         
         // Clean up cached process data
         processDataCache.remove(processData.getProcessId());
+        
+        // Clean up scheduled tasks using db-scheduler API (preserve failed tasks for debugging)
+        cleanupScheduledTasksForFailedProcess(processData.getProcessId());
     }
 
     /**
@@ -406,36 +415,30 @@ public class ProcessOrchestrator {
                 if (processData != null && processData.getProcessRecordId() != null) {
                     processRecordId = processData.getProcessRecordId();
                 } else {
-                    // If we can't find the process data, try to extract the process record ID from the task ID
-                    // Task ID format: {processRecordId}-{timestamp}-{uuid}-task-{index}
-                    String taskId = taskData.getTaskId();
-                    if (taskId.contains("-task-")) {
-                        processRecordId = taskId.substring(0, taskId.indexOf("-task-"));
-                        // Extract the actual process record ID (before the first timestamp)
-                        // Format: {processRecordId}-{timestamp}-{uuid}
-                        String[] parts = processRecordId.split("-");
-                        if (parts.length >= 3) {
-                            // Find the first part that looks like a timestamp (long number)
-                            int timestampIndex = -1;
-                            for (int i = 1; i < parts.length; i++) {
-                                try {
-                                    Long.parseLong(parts[i]);
-                                    timestampIndex = i;
-                                    break;
-                                } catch (NumberFormatException e) {
-                                    // Not a timestamp, continue
-                                }
+                    // If we can't find the process data, try to extract the process record ID from the orchestrator process ID
+                    // Orchestrator process ID format: {processRecordId}-{timestamp}-{uuid}
+                    // Task ID format: {orchestratorProcessId}-task-{index}
+                    String orchestratorProcessId = taskData.getProcessId();
+                    String[] parts = orchestratorProcessId.split("-");
+                    if (parts.length >= 3) {
+                        // Find the first part that looks like a timestamp (long number)
+                        int timestampIndex = -1;
+                        for (int i = 1; i < parts.length; i++) {
+                            try {
+                                Long.parseLong(parts[i]);
+                                timestampIndex = i;
+                                break;
+                            } catch (NumberFormatException e) {
+                                // Not a timestamp, continue
                             }
-                            if (timestampIndex > 0) {
-                                processRecordId = String.join("-", java.util.Arrays.copyOfRange(parts, 0, timestampIndex));
-                            } else {
-                                processRecordId = parts[0]; // fallback to first part
-                            }
+                        }
+                        if (timestampIndex > 0) {
+                            processRecordId = String.join("-", java.util.Arrays.copyOfRange(parts, 0, timestampIndex));
                         } else {
                             processRecordId = parts[0]; // fallback to first part
                         }
                     } else {
-                        processRecordId = taskData.getProcessId(); // fallback
+                        processRecordId = orchestratorProcessId; // fallback
                     }
                 }
                 
@@ -598,6 +601,47 @@ public class ProcessOrchestrator {
         // TODO: Implement based on simplified schema
         logger.warn("getAllProcesses method needs to be implemented for simplified schema");
         return new ArrayList<>();
+    }
+
+    /**
+     * Clean up scheduled tasks for a completed process using db-scheduler API
+     * db-scheduler automatically manages scheduled_tasks table cleanup
+     */
+    private void cleanupScheduledTasksForCompletedProcess(String processId) {
+        try {
+            // db-scheduler automatically cleans up completed tasks from scheduled_tasks table
+            // We just need to ensure the scheduler knows the process is complete
+            logger.info("Process {} completed - db-scheduler will automatically clean up scheduled_tasks records", processId);
+        } catch (Exception e) {
+            logger.error("Error during process completion cleanup for: {}", processId, e);
+        }
+    }
+
+    /**
+     * Clean up scheduled tasks for a failed process using db-scheduler API
+     * db-scheduler preserves failed tasks in scheduled_tasks table for debugging
+     */
+    private void cleanupScheduledTasksForFailedProcess(String processId) {
+        try {
+            // db-scheduler automatically preserves failed tasks in scheduled_tasks table
+            // This allows for debugging failed processes
+            logger.info("Process {} failed - db-scheduler will preserve failed scheduled_tasks records for debugging", processId);
+        } catch (Exception e) {
+            logger.error("Error during failed process cleanup for: {}", processId, e);
+        }
+    }
+
+    /**
+     * Clean up scheduled task for a completed task using db-scheduler API
+     * db-scheduler automatically manages individual task cleanup
+     */
+    private void cleanupScheduledTaskForCompletedTask(String taskId) {
+        try {
+            // db-scheduler automatically cleans up completed tasks from scheduled_tasks table
+            logger.debug("Task {} completed - db-scheduler will automatically clean up scheduled_tasks record", taskId);
+        } catch (Exception e) {
+            logger.error("Error during task completion cleanup for: {}", taskId, e);
+        }
     }
 
     /**

@@ -504,4 +504,83 @@ public class ProcessRecordIntegrationTest {
         
         logger.info("Multiple process execution test completed successfully");
     }
+
+    @Test
+    void testConcurrentProcessExecution() {
+        logger.info("Testing concurrent execution of 10 processes");
+        
+        // Create 10 process records with the same process definition (test-process with 2 tasks)
+        String[] processIds = new String[10];
+        ProcessRecordController.ProcessRecordResponse[] responses = new ProcessRecordController.ProcessRecordResponse[10];
+        
+        for (int i = 0; i < 10; i++) {
+            processIds[i] = "concurrent-test-" + (i + 1);
+            String inputData = "input_file:/test/input" + (i + 1) + ".json;output_dir:/test/output" + (i + 1);
+            
+            // All processes use the same definition: test-process (2 tasks)
+            responses[i] = processRecordController.createProcessRecord(
+                processIds[i], "test-process", inputData, null);
+            
+            assertTrue(responses[i].isSuccess(), "Process record " + (i + 1) + " creation should succeed");
+            assertEquals(processIds[i], responses[i].getData().getId());
+            assertEquals("test-process", responses[i].getData().getType());
+            assertEquals("PENDING", responses[i].getData().getCurrentStatus());
+        }
+        
+        // Start all 10 processes concurrently
+        ProcessController.ProcessStartResponse[] startResponses = new ProcessController.ProcessStartResponse[10];
+        for (int i = 0; i < 10; i++) {
+            startResponses[i] = processController.startProcess(processIds[i]);
+            assertTrue(startResponses[i].isSuccess(), "Process " + (i + 1) + " start should succeed");
+            assertNotNull(startResponses[i].getProcessId());
+            assertNotNull(startResponses[i].getOrchestratorProcessId());
+            logger.info("Started process {} with orchestrator ID: {}", processIds[i], startResponses[i].getOrchestratorProcessId());
+        }
+        
+        // Wait for processes to complete (test-process has 2 tasks, so should complete relatively quickly)
+        try {
+            Thread.sleep(20000); // Wait 20 seconds for all processes to complete
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            fail("Test interrupted while waiting for processes");
+        }
+        
+        // Check final status of all processes
+        ProcessController.ProcessStateResponse[] stateResponses = new ProcessController.ProcessStateResponse[10];
+        for (int i = 0; i < 10; i++) {
+            stateResponses[i] = processController.getProcessState(processIds[i]);
+            assertTrue(stateResponses[i].isSuccess(), "Process " + (i + 1) + " state check should succeed");
+            logger.info("Process {} final status: {}", processIds[i], stateResponses[i].getProcessRecord().getCurrentStatus());
+        }
+        
+        // Count process statuses
+        int completedCount = 0;
+        int inProgressCount = 0;
+        int failedCount = 0;
+        
+        for (int i = 0; i < 10; i++) {
+            String status = stateResponses[i].getProcessRecord().getCurrentStatus();
+            switch (status) {
+                case "COMPLETED":
+                    completedCount++;
+                    break;
+                case "IN_PROGRESS":
+                    inProgressCount++;
+                    break;
+                case "FAILED":
+                    failedCount++;
+                    break;
+            }
+        }
+        
+        logger.info("Concurrent execution results:");
+        logger.info("  Completed: {}", completedCount);
+        logger.info("  In Progress: {}", inProgressCount);
+        logger.info("  Failed: {}", failedCount);
+        
+        // Most processes should have completed (test-process with 2 simple tasks)
+        assertTrue(completedCount >= 8, "At least 8 out of 10 processes should have completed");
+        
+        logger.info("Concurrent process execution test completed successfully");
+    }
 }
