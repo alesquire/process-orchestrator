@@ -1,8 +1,28 @@
 -- Database schema for Process Orchestrator
 -- This script creates the necessary tables for process management
 
--- Process Definitions table - stores process templates and execution history (user-managed)
-CREATE TABLE IF NOT EXISTS process_definitions (
+-- db-scheduler required table (PostgreSQL version)
+CREATE TABLE IF NOT EXISTS scheduled_tasks (
+    task_name TEXT NOT NULL,
+    task_instance TEXT NOT NULL,
+    task_data BYTEA,
+    execution_time TIMESTAMP WITH TIME ZONE NOT NULL,
+    picked BOOLEAN NOT NULL,
+    picked_by TEXT,
+    last_success TIMESTAMP WITH TIME ZONE,
+    last_failure TIMESTAMP WITH TIME ZONE,
+    consecutive_failures INT,
+    last_heartbeat TIMESTAMP WITH TIME ZONE,
+    version BIGINT NOT NULL,
+    PRIMARY KEY (task_name, task_instance)
+);
+
+-- Indexes for db-scheduler performance
+CREATE INDEX IF NOT EXISTS execution_time_idx ON scheduled_tasks (execution_time);
+CREATE INDEX IF NOT EXISTS last_heartbeat_idx ON scheduled_tasks (last_heartbeat);
+
+-- Process Records table - stores process templates and execution history (user-managed)
+CREATE TABLE IF NOT EXISTS process_record (
     id VARCHAR(255) PRIMARY KEY,
     type VARCHAR(255) NOT NULL,
     input_data TEXT NOT NULL,
@@ -24,16 +44,16 @@ CREATE TABLE IF NOT EXISTS process_definitions (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
     -- Indexes for performance
-    INDEX idx_process_definitions_status (current_status),
-    INDEX idx_process_definitions_type (type),
-    INDEX idx_process_definitions_schedule (schedule),
-    INDEX idx_process_definitions_created_at (created_at)
+    INDEX idx_process_record_status (current_status),
+    INDEX idx_process_record_type (type),
+    INDEX idx_process_record_schedule (schedule),
+    INDEX idx_process_record_created_at (created_at)
 );
 
 -- Processes table - stores active process execution state (engine-managed)
 CREATE TABLE IF NOT EXISTS processes (
     id VARCHAR(255) PRIMARY KEY,
-    definition_id VARCHAR(255) NOT NULL, -- Reference to process_definitions
+    process_record_id VARCHAR(255) NOT NULL, -- Reference to process_record
     type VARCHAR(255) NOT NULL,
     input_data TEXT NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
@@ -46,12 +66,12 @@ CREATE TABLE IF NOT EXISTS processes (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
     -- Foreign key constraint
-    FOREIGN KEY (definition_id) REFERENCES process_definitions(id) ON DELETE CASCADE,
+    FOREIGN KEY (process_record_id) REFERENCES process_record(id) ON DELETE CASCADE,
     
     -- Indexes for performance
     INDEX idx_processes_status (status),
     INDEX idx_processes_type (type),
-    INDEX idx_processes_definition_id (definition_id),
+    INDEX idx_processes_process_record_id (process_record_id),
     INDEX idx_processes_created_at (created_at)
 );
 

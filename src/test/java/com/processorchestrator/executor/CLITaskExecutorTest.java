@@ -94,8 +94,8 @@ class CLITaskExecutorTest {
         
         // Use a command that will definitely take longer than 1 second
         String command = System.getProperty("os.name").toLowerCase().contains("windows") 
-            ? "cmd /c ping 127.0.0.1 -n 100" 
-            : "sleep 100";
+            ? "cmd /c ping 127.0.0.1 -n 5" 
+            : "sleep 5";
         
         TaskData taskData = new TaskData("test-task", "test-process", "sleep-test", 
                                        command, System.getProperty("java.io.tmpdir"), 1, 1); // 1 second timeout

@@ -1,5 +1,6 @@
 package com.processorchestrator;
 
+import com.processorchestrator.config.DatabaseConfig;
 import com.processorchestrator.model.ProcessInputData;
 import com.processorchestrator.model.ProcessData;
 import com.processorchestrator.model.TaskData;
@@ -55,16 +56,16 @@ public class Main {
             @Override
             public Connection getConnection() throws SQLException {
                 return DriverManager.getConnection(
-                    "jdbc:postgresql://localhost:5432/process_orchestrator",
-                    "postgres",
-                    "password"
+                    DatabaseConfig.getDatabaseUrl(),
+                    DatabaseConfig.getDatabaseUsername(),
+                    DatabaseConfig.getDatabasePassword()
                 );
             }
 
             @Override
             public Connection getConnection(String username, String password) throws SQLException {
                 return DriverManager.getConnection(
-                    "jdbc:postgresql://localhost:5432/process_orchestrator",
+                    DatabaseConfig.getDatabaseUrl(),
                     username,
                     password
                 );
