@@ -394,9 +394,27 @@ public class ProcessOrchestrator {
                     if (taskId.contains("-task-")) {
                         processRecordId = taskId.substring(0, taskId.indexOf("-task-"));
                         // Extract the actual process record ID (before the first timestamp)
-                        int firstDash = processRecordId.indexOf('-');
-                        if (firstDash > 0) {
-                            processRecordId = processRecordId.substring(0, firstDash);
+                        // Format: {processRecordId}-{timestamp}-{uuid}
+                        String[] parts = processRecordId.split("-");
+                        if (parts.length >= 3) {
+                            // Find the first part that looks like a timestamp (long number)
+                            int timestampIndex = -1;
+                            for (int i = 1; i < parts.length; i++) {
+                                try {
+                                    Long.parseLong(parts[i]);
+                                    timestampIndex = i;
+                                    break;
+                                } catch (NumberFormatException e) {
+                                    // Not a timestamp, continue
+                                }
+                            }
+                            if (timestampIndex > 0) {
+                                processRecordId = String.join("-", java.util.Arrays.copyOfRange(parts, 0, timestampIndex));
+                            } else {
+                                processRecordId = parts[0]; // fallback to first part
+                            }
+                        } else {
+                            processRecordId = parts[0]; // fallback to first part
                         }
                     } else {
                         processRecordId = taskData.getProcessId(); // fallback

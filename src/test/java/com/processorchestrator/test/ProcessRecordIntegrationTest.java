@@ -9,6 +9,7 @@ import com.processorchestrator.dao.ProcessRecordDAO;
 import com.processorchestrator.database.DBInitializer;
 import com.processorchestrator.model.ProcessDetails;
 import com.processorchestrator.service.ProcessOrchestrator;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -39,6 +40,7 @@ public class ProcessRecordIntegrationTest {
     private ProcessRecordController processRecordController;
     private ProcessController processController;
     private ProcessOrchestrator processOrchestrator;
+    private DBInitializer dbInitializer;
 
     @BeforeEach
     void setUp() {
@@ -79,16 +81,30 @@ public class ProcessRecordIntegrationTest {
         };
         
         // Initialize database schema using DBInitializer
-        DBInitializer dbInitializer = new DBInitializer(dataSource);
+        dbInitializer = new DBInitializer(dataSource);
         dbInitializer.initializeDatabase();
         
             // Create services
             ProcessTypeRegistry registry = createProcessTypeRegistry();
             processOrchestrator = new ProcessOrchestrator(dataSource, registry);
+            processOrchestrator.start(); // Start the orchestrator
 
             processRecordDAO = new ProcessRecordDAO(dataSource);
             processRecordController = new ProcessRecordController(processRecordDAO);
             processController = new ProcessController(processRecordDAO, processOrchestrator);
+    }
+
+    @AfterEach
+    void tearDown() {
+        // Stop the ProcessOrchestrator scheduler
+        if (processOrchestrator != null) {
+            processOrchestrator.stop();
+        }
+        
+        // Clean up test data using DBInitializer
+        if (dbInitializer != null) {
+            dbInitializer.cleanupTestData();
+        }
     }
 
     private ProcessTypeRegistry createProcessTypeRegistry() {

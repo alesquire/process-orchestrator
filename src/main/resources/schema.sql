@@ -3,8 +3,8 @@
 
 -- db-scheduler's scheduled_tasks table (required by db-scheduler)
 CREATE TABLE IF NOT EXISTS scheduled_tasks (
-    task_name VARCHAR(255) PRIMARY KEY,
-    task_instance VARCHAR(255) PRIMARY KEY,
+    task_name VARCHAR(255) NOT NULL,
+    task_instance VARCHAR(255) NOT NULL,
     task_data BYTEA,
     execution_time TIMESTAMP WITH TIME ZONE NOT NULL,
     picked BOOLEAN NOT NULL DEFAULT FALSE,
@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS scheduled_tasks (
     consecutive_failures INTEGER NOT NULL DEFAULT 0,
     last_heartbeat TIMESTAMP WITH TIME ZONE,
     version BIGINT NOT NULL DEFAULT 0,
-    UNIQUE (task_name, task_instance)
+    PRIMARY KEY (task_name, task_instance)
 );
 
 -- Process record table (user-managed process templates)

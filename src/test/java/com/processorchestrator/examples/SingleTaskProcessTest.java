@@ -111,9 +111,9 @@ public class SingleTaskProcessTest {
     private void registerSingleTaskProcessType() {
         logger.info("Registering single task process type...");
 
-        // Create a process type with one task that prints input text three times
-        ProcessType singleTaskProcess = new ProcessType("single-print-task", "Process that prints input text three times")
-                .addTask("print-text", "python -c \"import sys; text='${input_text}'; [print(f'Print {i+1}: {text}') for i in range(3)]\"", System.getProperty("java.io.tmpdir"), 30, 2);
+        // Create a process type with one task that prints special message and input text three times
+        ProcessType singleTaskProcess = new ProcessType("single-print-task", "Process that prints special message and input text three times")
+                .addTask("print-text", "python -c \"print('!!!THIS IS A TEST MESSAGE!!!'); import sys; text='${input_text}'; [print(f'Print {i+1}: {text}') for i in range(3)]\"", System.getProperty("java.io.tmpdir"), 30, 2);
         
         processTypeRegistry.register(singleTaskProcess);
         logger.info("Registered single-print-task with {} tasks", singleTaskProcess.getTaskCount());

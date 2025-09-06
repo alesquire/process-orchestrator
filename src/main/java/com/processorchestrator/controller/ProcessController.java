@@ -61,6 +61,9 @@ public class ProcessController {
             // Update process record status
             processRecordDAO.updateStatus(processRecordId, "IN_PROGRESS", Instant.now(), null);
             
+            // Update triggered_by field
+            processRecordDAO.updateTriggeredBy(processRecordId, "MANUAL");
+            
             // Start the process using the orchestrator
             String orchestratorProcessId = processOrchestrator.startProcess(record.getType(), inputData, processId, processRecordId);
             
