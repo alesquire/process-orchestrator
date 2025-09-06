@@ -188,6 +188,7 @@ public class ProcessOrchestrator {
             
             if (result.isSuccess()) {
                 logger.info("CLI task {} completed successfully", taskId);
+                logger.info("Task output: {}", result.getOutput());
                 taskData.markAsCompleted(result.getExitCode(), result.getOutput());
                 
                 // Persist task results

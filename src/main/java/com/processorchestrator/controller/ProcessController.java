@@ -223,30 +223,62 @@ public class ProcessController {
         try {
             ProcessInputData inputData = new ProcessInputData();
             
-            // Simple parsing - in production, use proper JSON parsing
             if (inputDataJson != null && !inputDataJson.trim().isEmpty()) {
-                // For this example, we'll assume the input data contains key-value pairs
-                // separated by semicolons, e.g., "input_file:/data/input.json;output_dir:/data/output"
-                String[] pairs = inputDataJson.split(";");
-                for (String pair : pairs) {
-                    String[] keyValue = pair.split(":", 2);
-                    if (keyValue.length == 2) {
-                        String key = keyValue[0].trim();
-                        String value = keyValue[1].trim();
-                        
-                        switch (key) {
-                            case "input_file":
-                                inputData.setInputFile(value);
-                                break;
-                            case "output_dir":
-                                inputData.setOutputDir(value);
-                                break;
-                            case "user_id":
-                                inputData.setUserId(value);
-                                break;
-                            default:
-                                inputData.addConfig(key, value);
-                                break;
+                // Check if it's JSON format
+                if (inputDataJson.trim().startsWith("{")) {
+                    // Simple JSON parsing - extract key-value pairs
+                    // Remove braces and quotes, then split by comma
+                    String content = inputDataJson.trim()
+                        .replaceAll("^\\{|\\}$", "") // Remove outer braces
+                        .replaceAll("\"", ""); // Remove quotes
+                    
+                    String[] pairs = content.split(",");
+                    for (String pair : pairs) {
+                        String[] keyValue = pair.split(":", 2);
+                        if (keyValue.length == 2) {
+                            String key = keyValue[0].trim();
+                            String value = keyValue[1].trim();
+                            
+                            switch (key) {
+                                case "input_file":
+                                    inputData.setInputFile(value);
+                                    break;
+                                case "output_dir":
+                                    inputData.setOutputDir(value);
+                                    break;
+                                case "user_id":
+                                    inputData.setUserId(value);
+                                    break;
+                                default:
+                                    inputData.addConfig(key, value);
+                                    break;
+                            }
+                        }
+                    }
+                } else {
+                    // Legacy semicolon-separated format
+                    // e.g., "input_file:/data/input.json;output_dir:/data/output"
+                    String[] pairs = inputDataJson.split(";");
+                    for (String pair : pairs) {
+                        String[] keyValue = pair.split(":", 2);
+                        if (keyValue.length == 2) {
+                            String key = keyValue[0].trim();
+                            String value = keyValue[1].trim();
+                            
+                            switch (key) {
+                                case "input_file":
+                                    inputData.setInputFile(value);
+                                    break;
+                                case "output_dir":
+                                    inputData.setOutputDir(value);
+                                    break;
+                                case "user_id":
+                                    inputData.setUserId(value);
+                                    break;
+                                default:
+                                    inputData.addConfig(key, value);
+                                    break;
+                            }
                         }
                     }
                 }
