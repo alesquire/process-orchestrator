@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: process_orchestrator_postgres
+    environment:
+      POSTGRES_DB: process_orchestrator
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: your-super-secret-and-long-postgres-password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      # Store PostgreSQL data in Windows local directory
+      - ./postgres-data:/var/lib/postgresql/data
+      # Mount schema file for initialization
+      - ./src/main/resources/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d process_orchestrator"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - process_orchestrator_network
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: process_orchestrator_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@processorchestrator.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+    ports:
+      - "8080:80"
+    volumes:
+      # Store pgAdmin data in Windows local directory
+      - ./pgadmin-data:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - process_orchestrator_network
+
+networks:
+  process_orchestrator_network:
+    driver: bridge
+    name: process_orchestrator_network
+
+volumes:
+  # These volumes will be created in the current directory
+  postgres_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./postgres-data
+  
+  pgadmin_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./pgadmin-data
+
+
