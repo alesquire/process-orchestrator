@@ -174,7 +174,7 @@ public class ProcessRecordIntegrationTest {
             
             // Update status for testing
             if (!"PENDING".equals(statuses[i])) {
-                processRecordDAO.updateStatus(recordIds[i], statuses[i], null);
+                processRecordDAO.updateStatus(recordIds[i], statuses[i], java.time.Instant.now(), null);
             }
         }
         
@@ -237,7 +237,7 @@ public class ProcessRecordIntegrationTest {
         
         assertTrue(getResponse.isSuccess(), "Process record retrieval should succeed");
         assertEquals("IN_PROGRESS", getResponse.getData().getCurrentStatus(), "Status should be IN_PROGRESS");
-        assertNotNull(getResponse.getData().getCurrentProcessId(), "Current process ID should be set");
+        assertNotNull(getResponse.getData().getTriggeredBy(), "Triggered by should be set");
         
         // Test Get Process State
         ProcessController.ProcessStateResponse stateResponse = 
