@@ -96,8 +96,8 @@ public class ProcessRecordIntegrationTest {
         
         // Register a simple test process type
         ProcessType testProcessType = new ProcessType("test-process", "Test process for integration testing")
-                .addTask("task1", "echo 'Task 1 executed'", "/tmp", 30, 2)
-                .addTask("task2", "echo 'Task 2 executed'", "/tmp", 30, 2);
+                .addTask("task1", "echo 'Task 1 executed'", System.getProperty("java.io.tmpdir"), 30, 2)
+                .addTask("task2", "echo 'Task 2 executed'", System.getProperty("java.io.tmpdir"), 30, 2);
         
         registry.register(testProcessType);
         

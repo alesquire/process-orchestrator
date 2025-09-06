@@ -11,11 +11,13 @@ import java.util.HashMap;
  * Contains runtime process information for task execution
  */
 public class ProcessData implements Serializable {
+    private static final long serialVersionUID = 1L;
     private String processId;
     private String processTypeName;
     private int totalTasks;
     private ProcessInputData inputData;
     private List<TaskData> tasks;
+    private String processRecordId; // Link to ProcessRecord in database
     private int currentTaskIndex;
     private String status;
     private Instant startedAt;
@@ -30,11 +32,16 @@ public class ProcessData implements Serializable {
     }
 
     public ProcessData(String processId, String processTypeName, int totalTasks, ProcessInputData inputData) {
+        this(processId, processTypeName, totalTasks, inputData, null);
+    }
+    
+    public ProcessData(String processId, String processTypeName, int totalTasks, ProcessInputData inputData, String processRecordId) {
         this();
         this.processId = processId;
         this.processTypeName = processTypeName;
         this.totalTasks = totalTasks;
         this.inputData = inputData;
+        this.processRecordId = processRecordId;
     }
 
     // Getters and Setters
@@ -52,6 +59,9 @@ public class ProcessData implements Serializable {
 
     public List<TaskData> getTasks() { return tasks; }
     public void setTasks(List<TaskData> tasks) { this.tasks = tasks; }
+
+    public String getProcessRecordId() { return processRecordId; }
+    public void setProcessRecordId(String processRecordId) { this.processRecordId = processRecordId; }
 
     public int getCurrentTaskIndex() { return currentTaskIndex; }
     public void setCurrentTaskIndex(int currentTaskIndex) { this.currentTaskIndex = currentTaskIndex; }

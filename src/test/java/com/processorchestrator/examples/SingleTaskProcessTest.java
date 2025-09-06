@@ -11,6 +11,7 @@ import com.processorchestrator.model.ProcessDetails;
 import com.processorchestrator.service.ProcessOrchestrator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.AfterEach;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -91,6 +92,17 @@ public class SingleTaskProcessTest {
         
         // Register the single task process type
         registerSingleTaskProcessType();
+        
+        // Start the ProcessOrchestrator scheduler
+        processOrchestrator.start();
+    }
+    
+    @AfterEach
+    void tearDown() {
+        // Stop the ProcessOrchestrator scheduler
+        if (processOrchestrator != null) {
+            processOrchestrator.stop();
+        }
     }
 
     /**
@@ -101,7 +113,7 @@ public class SingleTaskProcessTest {
 
         // Create a process type with one task that prints input text three times
         ProcessType singleTaskProcess = new ProcessType("single-print-task", "Process that prints input text three times")
-                .addTask("print-text", "python -c \"import sys; text='${input_text}'; [print(f'Print {i+1}: {text}') for i in range(3)]\"", "/tmp", 30, 2);
+                .addTask("print-text", "python -c \"import sys; text='${input_text}'; [print(f'Print {i+1}: {text}') for i in range(3)]\"", System.getProperty("java.io.tmpdir"), 30, 2);
         
         processTypeRegistry.register(singleTaskProcess);
         logger.info("Registered single-print-task with {} tasks", singleTaskProcess.getTaskCount());

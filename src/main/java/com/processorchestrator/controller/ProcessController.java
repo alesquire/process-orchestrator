@@ -62,7 +62,7 @@ public class ProcessController {
             processRecordDAO.updateStatus(processRecordId, "IN_PROGRESS", Instant.now(), null);
             
             // Start the process using the orchestrator
-            String orchestratorProcessId = processOrchestrator.startProcess(record.getType(), inputData);
+            String orchestratorProcessId = processOrchestrator.startProcess(record.getType(), inputData, processId, processRecordId);
             
             logger.info("Process {} started successfully with orchestrator ID: {}", processRecordId, orchestratorProcessId);
             
