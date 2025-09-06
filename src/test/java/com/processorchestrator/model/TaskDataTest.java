@@ -19,7 +19,7 @@ class TaskDataTest {
         assertEquals("/data", taskData.getWorkingDirectory());
         assertEquals(30, taskData.getTimeoutMinutes());
         assertEquals(2, taskData.getMaxRetries());
-        assertEquals(TaskStatus.PENDING, taskData.getStatus());
+        assertEquals("PENDING", taskData.getStatus());
         assertEquals(0, taskData.getRetryCount());
     }
 
@@ -47,7 +47,7 @@ class TaskDataTest {
         
         taskData.markAsCompleted(0, "Validation completed successfully");
         
-        assertEquals(TaskStatus.COMPLETED, taskData.getStatus());
+        assertEquals("COMPLETED", taskData.getStatus());
         assertEquals(0, taskData.getExitCode());
         assertEquals("Validation completed successfully", taskData.getOutput());
         assertNotNull(taskData.getCompletedAt());
@@ -60,7 +60,7 @@ class TaskDataTest {
         
         taskData.markAsFailed("Validation failed: invalid format");
         
-        assertEquals(TaskStatus.FAILED, taskData.getStatus());
+        assertEquals("FAILED", taskData.getStatus());
         assertEquals("Validation failed: invalid format", taskData.getErrorMessage());
         assertNotNull(taskData.getCompletedAt());
     }
@@ -72,7 +72,7 @@ class TaskDataTest {
         
         taskData.markAsStarted();
         
-        assertEquals(TaskStatus.IN_PROGRESS, taskData.getStatus());
+        assertEquals("IN_PROGRESS", taskData.getStatus());
         assertNotNull(taskData.getStartedAt());
     }
 }

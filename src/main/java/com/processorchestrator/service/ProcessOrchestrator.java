@@ -9,11 +9,10 @@ import com.github.kagkarlsson.scheduler.task.ExecutionContext;
 import com.processorchestrator.config.ProcessType;
 import com.processorchestrator.config.ProcessTypeRegistry;
 import com.processorchestrator.executor.CLITaskExecutor;
-import com.processorchestrator.model.ProcessData;
 import com.processorchestrator.model.ProcessInputData;
-import com.processorchestrator.model.ProcessStatus;
+import com.processorchestrator.model.ProcessData;
+import com.processorchestrator.model.ProcessDetails;
 import com.processorchestrator.model.TaskData;
-import com.processorchestrator.model.TaskStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -198,7 +197,7 @@ public class ProcessOrchestrator {
                     logger.info("Retrying CLI task {} (attempt {}/{})", taskId, 
                               taskData.getRetryCount() + 1, taskData.getMaxRetries());
                     taskData.incrementRetryCount();
-                    taskData.setStatus(TaskStatus.PENDING);
+                    taskData.setStatus("PENDING");
                     
                     // Persist retry attempt
                     // Save task data (simplified - no longer using ProcessResultService)
@@ -385,7 +384,7 @@ public class ProcessOrchestrator {
      * Get processes by status
      * Note: This method is simplified and may need to be updated based on actual requirements
      */
-    public List<ProcessData> getProcessesByStatus(ProcessStatus status) {
+    public List<ProcessData> getProcessesByStatus(String status) {
         // TODO: Implement based on simplified schema
         logger.warn("getProcessesByStatus method needs to be implemented for simplified schema");
         return new ArrayList<>();

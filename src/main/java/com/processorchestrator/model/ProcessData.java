@@ -2,57 +2,62 @@ package com.processorchestrator.model;
 
 import java.io.Serializable;
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 
 /**
- * Data class for process information stored in db-scheduler task data
+ * Simplified ProcessData model for db-scheduler integration
+ * Contains runtime process information for task execution
  */
 public class ProcessData implements Serializable {
     private String processId;
-    private String processType;
-    private ProcessStatus status;
-    private int currentTaskIndex;
+    private String processTypeName;
     private int totalTasks;
+    private ProcessInputData inputData;
+    private List<TaskData> tasks;
+    private int currentTaskIndex;
+    private String status;
     private Instant startedAt;
     private Instant completedAt;
     private String errorMessage;
-    private List<TaskData> tasks;
-    
-    // Input context
-    private ProcessInputData inputData;
-    private Map<String, Object> processContext; // Runtime context
+    private Map<String, Object> processContext;
 
     public ProcessData() {
+        this.currentTaskIndex = 0;
+        this.status = "PENDING";
         this.processContext = new HashMap<>();
     }
 
-    public ProcessData(String processId, String processType, int totalTasks, ProcessInputData inputData) {
+    public ProcessData(String processId, String processTypeName, int totalTasks, ProcessInputData inputData) {
         this();
         this.processId = processId;
-        this.processType = processType;
+        this.processTypeName = processTypeName;
         this.totalTasks = totalTasks;
         this.inputData = inputData;
-        this.status = ProcessStatus.NOT_STARTED;
-        this.currentTaskIndex = 0;
     }
 
     // Getters and Setters
     public String getProcessId() { return processId; }
     public void setProcessId(String processId) { this.processId = processId; }
 
-    public String getProcessType() { return processType; }
-    public void setProcessType(String processType) { this.processType = processType; }
+    public String getProcessTypeName() { return processTypeName; }
+    public void setProcessTypeName(String processTypeName) { this.processTypeName = processTypeName; }
 
-    public ProcessStatus getStatus() { return status; }
-    public void setStatus(ProcessStatus status) { this.status = status; }
+    public int getTotalTasks() { return totalTasks; }
+    public void setTotalTasks(int totalTasks) { this.totalTasks = totalTasks; }
+
+    public ProcessInputData getInputData() { return inputData; }
+    public void setInputData(ProcessInputData inputData) { this.inputData = inputData; }
+
+    public List<TaskData> getTasks() { return tasks; }
+    public void setTasks(List<TaskData> tasks) { this.tasks = tasks; }
 
     public int getCurrentTaskIndex() { return currentTaskIndex; }
     public void setCurrentTaskIndex(int currentTaskIndex) { this.currentTaskIndex = currentTaskIndex; }
 
-    public int getTotalTasks() { return totalTasks; }
-    public void setTotalTasks(int totalTasks) { this.totalTasks = totalTasks; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
 
     public Instant getStartedAt() { return startedAt; }
     public void setStartedAt(Instant startedAt) { this.startedAt = startedAt; }
@@ -63,26 +68,24 @@ public class ProcessData implements Serializable {
     public String getErrorMessage() { return errorMessage; }
     public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; }
 
-    public List<TaskData> getTasks() { return tasks; }
-    public void setTasks(List<TaskData> tasks) { this.tasks = tasks; }
-
-    public ProcessInputData getInputData() { return inputData; }
-    public void setInputData(ProcessInputData inputData) { this.inputData = inputData; }
-
     public Map<String, Object> getProcessContext() { return processContext; }
     public void setProcessContext(Map<String, Object> processContext) { this.processContext = processContext; }
 
-    // Business methods
+    public void addContext(String key, Object value) {
+        this.processContext.put(key, value);
+    }
+
+    // Utility methods
     public boolean isCompleted() {
-        return status == ProcessStatus.COMPLETED;
+        return "COMPLETED".equals(status);
     }
 
     public boolean isFailed() {
-        return status == ProcessStatus.FAILED;
+        return "FAILED".equals(status);
     }
 
-    public boolean hasMoreTasks() {
-        return currentTaskIndex < totalTasks;
+    public boolean isRunning() {
+        return "IN_PROGRESS".equals(status);
     }
 
     public TaskData getCurrentTask() {
@@ -92,30 +95,27 @@ public class ProcessData implements Serializable {
         return null;
     }
 
+    public boolean hasMoreTasks() {
+        return currentTaskIndex < totalTasks;
+    }
+
     public void moveToNextTask() {
         this.currentTaskIndex++;
-        if (currentTaskIndex >= totalTasks) {
-            this.status = ProcessStatus.COMPLETED;
-            this.completedAt = Instant.now();
-        }
+    }
+
+    public void markAsCompleted() {
+        this.status = "COMPLETED";
+        this.completedAt = Instant.now();
     }
 
     public void markAsFailed(String errorMessage) {
-        this.status = ProcessStatus.FAILED;
+        this.status = "FAILED";
         this.errorMessage = errorMessage;
         this.completedAt = Instant.now();
     }
 
     public void markAsStarted() {
-        this.status = ProcessStatus.IN_PROGRESS;
+        this.status = "IN_PROGRESS";
         this.startedAt = Instant.now();
-    }
-    
-    public void addContext(String key, Object value) {
-        this.processContext.put(key, value);
-    }
-    
-    public Object getContext(String key) {
-        return this.processContext.get(key);
     }
 }

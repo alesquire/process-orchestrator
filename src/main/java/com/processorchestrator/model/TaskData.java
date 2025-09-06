@@ -15,7 +15,7 @@ public class TaskData implements Serializable {
     private int timeoutMinutes;
     private int maxRetries;
     private int retryCount;
-    private TaskStatus status;
+    private String status;
     private Instant startedAt;
     private Instant completedAt;
     private String errorMessage;
@@ -33,7 +33,7 @@ public class TaskData implements Serializable {
         this.workingDirectory = workingDirectory;
         this.timeoutMinutes = timeoutMinutes;
         this.maxRetries = maxRetries;
-        this.status = TaskStatus.PENDING;
+        this.status = "PENDING";
         this.retryCount = 0;
     }
 
@@ -62,8 +62,8 @@ public class TaskData implements Serializable {
     public int getRetryCount() { return retryCount; }
     public void setRetryCount(int retryCount) { this.retryCount = retryCount; }
 
-    public TaskStatus getStatus() { return status; }
-    public void setStatus(TaskStatus status) { this.status = status; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
 
     public Instant getStartedAt() { return startedAt; }
     public void setStartedAt(Instant startedAt) { this.startedAt = startedAt; }
@@ -90,20 +90,20 @@ public class TaskData implements Serializable {
     }
 
     public void markAsCompleted(int exitCode, String output) {
-        this.status = TaskStatus.COMPLETED;
+        this.status = "COMPLETED";
         this.exitCode = exitCode;
         this.output = output;
         this.completedAt = Instant.now();
     }
 
     public void markAsFailed(String errorMessage) {
-        this.status = TaskStatus.FAILED;
+        this.status = "FAILED";
         this.errorMessage = errorMessage;
         this.completedAt = Instant.now();
     }
 
     public void markAsStarted() {
-        this.status = TaskStatus.IN_PROGRESS;
+        this.status = "IN_PROGRESS";
         this.startedAt = Instant.now();
     }
 }

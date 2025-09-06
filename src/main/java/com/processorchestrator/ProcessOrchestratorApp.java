@@ -203,8 +203,8 @@ public class ProcessOrchestratorApp {
                               process.getCurrentTaskIndex(), 
                               process.getTotalTasks());
                     
-                    if (process.getStatus() == com.processorchestrator.model.ProcessStatus.COMPLETED || 
-                        process.getStatus() == com.processorchestrator.model.ProcessStatus.FAILED) {
+                    if ("COMPLETED".equals(process.getStatus()) || 
+                        "FAILED".equals(process.getStatus())) {
                         break;
                     }
                 }
@@ -230,7 +230,7 @@ public class ProcessOrchestratorApp {
         var process = processOrchestrator.getProcess(processId);
         if (process != null) {
             logger.info("Process ID: {}", process.getProcessId());
-            logger.info("Process Type: {}", process.getProcessType());
+            logger.info("Process Type: {}", process.getProcessTypeName());
             logger.info("Status: {}", process.getStatus());
             logger.info("Started At: {}", process.getStartedAt());
             logger.info("Completed At: {}", process.getCompletedAt());
@@ -263,10 +263,10 @@ public class ProcessOrchestratorApp {
         // Display summary
         logger.info("=== SUMMARY ===");
         long completedTasks = tasks.stream()
-                .mapToLong(t -> t.getStatus() == com.processorchestrator.model.TaskStatus.COMPLETED ? 1 : 0)
+                .mapToLong(t -> "COMPLETED".equals(t.getStatus()) ? 1 : 0)
                 .sum();
         long failedTasks = tasks.stream()
-                .mapToLong(t -> t.getStatus() == com.processorchestrator.model.TaskStatus.FAILED ? 1 : 0)
+                .mapToLong(t -> "FAILED".equals(t.getStatus()) ? 1 : 0)
                 .sum();
         
         logger.info("Total Tasks: {}", tasks.size());
