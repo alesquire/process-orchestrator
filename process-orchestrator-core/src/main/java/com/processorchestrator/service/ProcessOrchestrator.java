@@ -514,7 +514,7 @@ public class ProcessOrchestrator {
                 }
             }
             
-            // Execute the next task directly instead of rescheduling the entire process
+            // Execute the next task directly in the same process context
             executeCurrentTask(processData, context);
         }
     }
@@ -606,6 +606,12 @@ public class ProcessOrchestrator {
                     }
                 }
                 
+                // Calculate task index from process data
+                int taskIndex = 0;
+                if (processData != null) {
+                    taskIndex = processData.getCurrentTaskIndex();
+                }
+                
                 // Check if the process record still exists before trying to save the task
                 String checkSql = "SELECT COUNT(*) FROM process_record WHERE id = ?";
                 try (PreparedStatement checkStatement = connection.prepareStatement(checkSql)) {
@@ -619,7 +625,7 @@ public class ProcessOrchestrator {
                 }
                 
                 statement.setString(2, processRecordId);
-                statement.setInt(3, 0); // task_index - we'll set this properly later
+                statement.setInt(3, taskIndex); // Use calculated task index
                 statement.setString(4, taskData.getName());
                 statement.setString(5, taskData.getCommand());
                 statement.setString(6, taskData.getWorkingDirectory());
