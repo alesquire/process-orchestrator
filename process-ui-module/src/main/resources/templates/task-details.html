@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Details - Process Orchestrator</title>
+    <link href="/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .task-details-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .task-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .task-details-table {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        .task-details-table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            color: #495057;
+            border: none;
+            padding: 15px;
+        }
+        .task-details-table td {
+            padding: 15px;
+            border: none;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .task-details-table tr:last-child td {
+            border-bottom: none;
+        }
+        .back-button {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            text-decoration: none;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+        .back-button:hover {
+            background: #5a6268;
+            color: white;
+            text-decoration: none;
+        }
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+        .status-running {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status-completed {
+            background-color: #cce5ff;
+            color: #004085;
+        }
+        .status-failed {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .status-pending {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="task-details-container">
+        <a href="/dashboard" class="back-button">← Back to Dashboard</a>
+        
+        <div class="task-header">
+            <h1>Task Details</h1>
+            <p class="mb-0" id="task-instance-id">Loading...</p>
+        </div>
+
+        <div class="task-details-table">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th style="width: 30%;">Parameter</th>
+                        <th style="width: 70%;">Value</th>
+                    </tr>
+                </thead>
+                <tbody id="task-details-tbody">
+                    <tr>
+                        <td colspan="2" class="text-center">Loading task details...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Get task ID from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const taskId = urlParams.get('id');
+        
+        if (!taskId) {
+            document.getElementById('task-instance-id').textContent = 'Error: No task ID provided';
+            document.getElementById('task-details-tbody').innerHTML = 
+                '<tr><td colspan="2" class="text-center text-danger">Error: No task ID provided</td></tr>';
+        } else {
+            document.getElementById('task-instance-id').textContent = `Task ID: ${taskId}`;
+            loadTaskDetails(taskId);
+        }
+
+        async function loadTaskDetails(taskId) {
+            try {
+                const response = await fetch(`/api/task-details/${taskId}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const taskDetails = await response.json();
+                
+                if (Object.keys(taskDetails).length === 0) {
+                    document.getElementById('task-details-tbody').innerHTML = 
+                        '<tr><td colspan="2" class="text-center text-warning">No task details found for this task ID</td></tr>';
+                    return;
+                }
+                
+                displayTaskDetails(taskDetails);
+            } catch (error) {
+                console.error('Error loading task details:', error);
+                document.getElementById('task-details-tbody').innerHTML = 
+                    '<tr><td colspan="2" class="text-center text-danger">Error loading task details: ' + error.message + '</td></tr>';
+            }
+        }
+
+        function displayTaskDetails(taskDetails) {
+            const tbody = document.getElementById('task-details-tbody');
+            tbody.innerHTML = '';
+            
+            // Define the order and labels for displaying parameters
+            const parameterOrder = [
+                { key: 'task_id', label: 'Task ID' },
+                { key: 'process_record_id', label: 'Process Record ID' },
+                { key: 'task_index', label: 'Task Index' },
+                { key: 'task_name', label: 'Task Name' },
+                { key: 'command', label: 'Command' },
+                { key: 'working_directory', label: 'Working Directory' },
+                { key: 'timeout_minutes', label: 'Timeout (Minutes)' },
+                { key: 'max_retries', label: 'Max Retries' },
+                { key: 'status', label: 'Status' },
+                { key: 'started_at', label: 'Started At' },
+                { key: 'completed_at', label: 'Completed At' },
+                { key: 'exit_code', label: 'Exit Code' },
+                { key: 'output', label: 'Output' },
+                { key: 'error_message', label: 'Error Message' },
+                { key: 'retry_count', label: 'Retry Count' }
+            ];
+            
+            parameterOrder.forEach(param => {
+                if (taskDetails.hasOwnProperty(param.key)) {
+                    const row = document.createElement('tr');
+                    const value = taskDetails[param.key];
+                    
+                    row.innerHTML = `
+                        <td><strong>${param.label}</strong></td>
+                        <td>${formatValue(value, param.key)}</td>
+                    `;
+                    tbody.appendChild(row);
+                }
+            });
+        }
+
+        function formatValue(value, key) {
+            if (value === null || value === undefined) {
+                return '<span class="text-muted">-</span>';
+            }
+            
+            // Format boolean values
+            if (typeof value === 'boolean') {
+                return value ? 
+                    '<span class="badge bg-success">Yes</span>' : 
+                    '<span class="badge bg-secondary">No</span>';
+            }
+            
+            // Format timestamps
+            if (key.includes('time') || key.includes('heartbeat') || key.includes('success') || key.includes('failure')) {
+                try {
+                    const date = new Date(value);
+                    return date.toLocaleString();
+                } catch (e) {
+                    return value;
+                }
+            }
+            
+            // Format task data (JSON)
+            if (key === 'task_data') {
+                try {
+                    const parsed = JSON.parse(value);
+                    return '<pre class="mb-0"><code>' + JSON.stringify(parsed, null, 2) + '</code></pre>';
+                } catch (e) {
+                    return value;
+                }
+            }
+            
+            // Format consecutive failures
+            if (key === 'consecutive_failures') {
+                if (value > 0) {
+                    return `<span class="badge bg-danger">${value}</span>`;
+                } else {
+                    return '<span class="badge bg-success">0</span>';
+                }
+            }
+            
+            return value;
+        }
+    </script>
+</body>
+</html>

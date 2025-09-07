@@ -23,6 +23,7 @@ import java.sql.ResultSet;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -603,6 +604,84 @@ public class ProcessOrchestrator {
         // TODO: Implement based on simplified schema
         logger.warn("getProcess method needs to be implemented for simplified schema");
         return null;
+    }
+
+    /**
+     * Get task details by task ID
+     * This queries our own tasks table since we execute tasks synchronously
+     */
+    public Map<String, Object> getTaskDetails(String taskId) {
+        Map<String, Object> taskDetails = new HashMap<>();
+        
+        logger.info("DEBUG: Getting task details for taskId: {}", taskId);
+        
+        try {
+            String sql = "SELECT id, process_record_id, task_index, task_name, command, working_directory, " +
+                        "timeout_minutes, max_retries, status, started_at, completed_at, " +
+                        "exit_code, output, error_message, retry_count " +
+                        "FROM tasks WHERE id = ?";
+            
+            logger.info("DEBUG: Executing SQL: {} with taskId: {}", sql, taskId);
+            
+            try (var connection = dataSource.getConnection();
+                 var statement = connection.prepareStatement(sql)) {
+                
+                statement.setString(1, taskId);
+                
+                try (var resultSet = statement.executeQuery()) {
+                    if (resultSet.next()) {
+                        logger.info("DEBUG: Found task in database");
+                        taskDetails.put("task_id", resultSet.getString("id"));
+                        taskDetails.put("process_record_id", resultSet.getString("process_record_id"));
+                        taskDetails.put("task_index", resultSet.getInt("task_index"));
+                        taskDetails.put("task_name", resultSet.getString("task_name"));
+                        taskDetails.put("command", resultSet.getString("command"));
+                        taskDetails.put("working_directory", resultSet.getString("working_directory"));
+                        taskDetails.put("timeout_minutes", resultSet.getInt("timeout_minutes"));
+                        taskDetails.put("max_retries", resultSet.getInt("max_retries"));
+                        taskDetails.put("status", resultSet.getString("status"));
+                        taskDetails.put("started_at", resultSet.getTimestamp("started_at"));
+                        taskDetails.put("completed_at", resultSet.getTimestamp("completed_at"));
+                        taskDetails.put("exit_code", resultSet.getInt("exit_code"));
+                        taskDetails.put("output", resultSet.getString("output"));
+                        taskDetails.put("error_message", resultSet.getString("error_message"));
+                        taskDetails.put("retry_count", resultSet.getInt("retry_count"));
+                    } else {
+                        logger.warn("DEBUG: No task found with id: {}", taskId);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.error("Failed to get task details for: {}", taskId, e);
+        }
+        
+        logger.info("DEBUG: Returning task details: {}", taskDetails);
+        return taskDetails;
+    }
+
+    /**
+     * Get all task IDs from the database for debugging
+     */
+    public List<String> getAllTaskIds() {
+        List<String> taskIds = new ArrayList<>();
+        
+        try {
+            String sql = "SELECT id FROM tasks ORDER BY id";
+            
+            try (var connection = dataSource.getConnection();
+                 var statement = connection.prepareStatement(sql)) {
+                
+                try (var resultSet = statement.executeQuery()) {
+                    while (resultSet.next()) {
+                        taskIds.add(resultSet.getString("id"));
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.error("Failed to get all task IDs", e);
+        }
+        
+        return taskIds;
     }
 
     /**
