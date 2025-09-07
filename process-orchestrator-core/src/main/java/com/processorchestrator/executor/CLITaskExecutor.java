@@ -25,9 +25,15 @@ public class CLITaskExecutor {
         
         ProcessBuilder processBuilder = new ProcessBuilder();
         
-        // Set command - split by spaces for proper execution
-        String[] commandParts = command.split("\\s+");
-        processBuilder.command(commandParts);
+        // Handle Windows vs Unix commands properly
+        if (command.trim().startsWith("cmd /c")) {
+            // Windows command - use cmd /c
+            processBuilder.command("cmd", "/c", command.substring(7).trim());
+        } else {
+            // Unix/Linux command - split properly preserving quoted arguments
+            String[] commandParts = parseCommand(command);
+            processBuilder.command(commandParts);
+        }
         
         // Set working directory if specified
         if (taskData.getWorkingDirectory() != null && !taskData.getWorkingDirectory().trim().isEmpty()) {
@@ -82,6 +88,36 @@ public class CLITaskExecutor {
             logger.error("Unexpected error executing task: {}", taskData.getName(), e);
             return ExecutionResult.failure("Unexpected error: " + e.getMessage());
         }
+    }
+    
+    /**
+     * Parse command string into array, preserving quoted arguments
+     */
+    private String[] parseCommand(String command) {
+        java.util.List<String> result = new java.util.ArrayList<>();
+        boolean inQuotes = false;
+        StringBuilder current = new StringBuilder();
+        
+        for (int i = 0; i < command.length(); i++) {
+            char c = command.charAt(i);
+            
+            if (c == '"') {
+                inQuotes = !inQuotes;
+            } else if (c == ' ' && !inQuotes) {
+                if (current.length() > 0) {
+                    result.add(current.toString());
+                    current = new StringBuilder();
+                }
+            } else {
+                current.append(c);
+            }
+        }
+        
+        if (current.length() > 0) {
+            result.add(current.toString());
+        }
+        
+        return result.toArray(new String[0]);
     }
 
     public static class ExecutionResult {

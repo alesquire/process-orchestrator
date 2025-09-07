@@ -425,11 +425,8 @@ public class ProcessOrchestrator {
                 }
             }
             
-            // Schedule next task execution
-            schedulerClient.schedule(
-                processTask.instance("process-" + processData.getProcessId(), processData),
-                Instant.now()
-            );
+            // Execute the next task directly instead of rescheduling the entire process
+            executeCurrentTask(processData, context);
         }
     }
 

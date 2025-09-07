@@ -95,6 +95,9 @@ public class ProcessRecordExampleTest {
         
         // Register process types
         ProcessTypeInitializer.registerDefaultProcessTypes(processTypeRegistry);
+        
+        // Start the orchestrator
+        processOrchestrator.start();
     }
 
     @Test
@@ -195,9 +198,14 @@ public class ProcessRecordExampleTest {
 
         // ==================== STEP 4: MONITOR PROCESS STATUS ====================
         
-        logger.info("Step 4: Monitoring process status...");
+        logger.info("Step 4: Monitoring process status and waiting for completion...");
 
-        // Check status of all processes
+        // Wait for all processes to complete
+        waitForProcessCompletion(processId1, "Single Task Process");
+        waitForProcessCompletion(processId2, "Two Task Process");
+        waitForProcessCompletion(processId3, "Three Task Process");
+
+        // Check final status of all processes
         ProcessController.ProcessStateResponse state1 = processController.getProcessState(processId1);
         ProcessController.ProcessStateResponse state2 = processController.getProcessState(processId2);
         ProcessController.ProcessStateResponse state3 = processController.getProcessState(processId3);
@@ -206,9 +214,9 @@ public class ProcessRecordExampleTest {
         assertTrue(state2.isSuccess(), "Should be able to get state for process 2");
         assertTrue(state3.isSuccess(), "Should be able to get state for process 3");
 
-        logger.info("✓ Process 1 Status: {}", state1.getProcessDetails().getCurrentStatus());
-        logger.info("✓ Process 2 Status: {}", state2.getProcessDetails().getCurrentStatus());
-        logger.info("✓ Process 3 Status: {}", state3.getProcessDetails().getCurrentStatus());
+        logger.info("✓ Process 1 Final Status: {}", state1.getProcessDetails().getCurrentStatus());
+        logger.info("✓ Process 2 Final Status: {}", state2.getProcessDetails().getCurrentStatus());
+        logger.info("✓ Process 3 Final Status: {}", state3.getProcessDetails().getCurrentStatus());
 
         // ==================== STEP 5: DISPLAY PROCESS DETAILS ====================
         
@@ -223,6 +231,9 @@ public class ProcessRecordExampleTest {
         
         logger.info("Step 6: Cleaning up test data...");
         dbInitializer.cleanupTestData();
+        
+        // Stop the orchestrator
+        processOrchestrator.stop();
         
         logger.info("=== ProcessRecord Creation and Execution Example Completed Successfully ===");
     }
@@ -265,5 +276,43 @@ public class ProcessRecordExampleTest {
         }
         
         logger.info("--- End {} Details ---", description);
+    }
+
+    /**
+     * Wait for a process to complete by polling its status
+     */
+    private void waitForProcessCompletion(String processId, String description) {
+        logger.info("Waiting for {} to complete...", description);
+        
+        int maxWaitTime = 120; // 2 minutes max wait time
+        int pollInterval = 1; // Poll every 1 second
+        
+        for (int i = 0; i < maxWaitTime; i++) {
+            ProcessController.ProcessStateResponse state = processController.getProcessState(processId);
+            
+            if (state.isSuccess()) {
+                String status = state.getProcessDetails().getCurrentStatus();
+                logger.info("{} status after {} seconds: {}", description, i + 1, status);
+                
+                if ("COMPLETED".equals(status)) {
+                    logger.info("✓ {} completed successfully after {} seconds", description, i + 1);
+                    return;
+                } else if ("FAILED".equals(status)) {
+                    logger.error("✗ {} failed after {} seconds", description, i + 1);
+                    fail(description + " failed with status: " + status);
+                }
+            } else {
+                logger.warn("Failed to get state for {}: {}", description, state.getMessage());
+            }
+            
+            try {
+                Thread.sleep(pollInterval * 1000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                fail("Interrupted while waiting for " + description + " to complete");
+            }
+        }
+        
+        fail(description + " did not complete within " + maxWaitTime + " seconds");
     }
 }
