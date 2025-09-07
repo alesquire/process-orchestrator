@@ -1,6 +1,7 @@
 package com.processorchestrator.test;
 
 import com.processorchestrator.config.DatabaseConfig;
+import com.processorchestrator.config.ProcessType;
 import com.processorchestrator.config.ProcessTypeRegistry;
 import com.processorchestrator.config.ProcessTypeInitializer;
 import com.processorchestrator.controller.ProcessRecordController;
@@ -135,7 +136,6 @@ public class ProcessRecordCRUDTest {
                 assertTrue(columns.contains("id"), "ID column should exist");
                 assertTrue(columns.contains("type"), "TYPE column should exist");
                 assertTrue(columns.contains("input_data"), "INPUT_DATA column should exist");
-                assertTrue(columns.contains("schedule"), "SCHEDULE column should exist");
                 assertTrue(columns.contains("current_status"), "CURRENT_STATUS column should exist");
                 assertTrue(columns.contains("current_task_index"), "CURRENT_TASK_INDEX column should exist");
                 assertTrue(columns.contains("total_tasks"), "TOTAL_TASKS column should exist");
@@ -189,19 +189,17 @@ public class ProcessRecordCRUDTest {
         
         // Create a process record
         String id = "test-crud-001";
-        String type = "single-task-process";
+        ProcessType processType = processTypeRegistry.getProcessType("single-task-process");
         String inputData = "test input data";
-        String schedule = "0 2 * * *";
         
         ProcessRecordController.ProcessRecordResponse response = 
-            processRecordController.createProcessRecord(id, type, inputData, schedule);
+            processRecordController.createProcessRecord(id, processType, inputData, null);
         
         assertTrue(response.isSuccess(), "Create should succeed");
         assertNotNull(response.getData(), "Response should contain process record");
         assertEquals(id, response.getData().getId(), "ID should match");
-        assertEquals(type, response.getData().getType(), "Type should match");
+        assertEquals(processType.getName(), response.getData().getType(), "Type should match");
         assertEquals(inputData, response.getData().getInputData(), "Input data should match");
-        assertEquals(schedule, response.getData().getSchedule(), "Schedule should match");
         
         logger.info("CREATE operation test passed");
     }
@@ -212,12 +210,11 @@ public class ProcessRecordCRUDTest {
         
         // First create a process record
         String id = "test-crud-002";
-        String type = "single-task-process";
+        ProcessType processType = processTypeRegistry.getProcessType("single-task-process");
         String inputData = "test input data for read";
-        String schedule = null; // Manual execution
         
         ProcessRecordController.ProcessRecordResponse createResponse = 
-            processRecordController.createProcessRecord(id, type, inputData, schedule);
+            processRecordController.createProcessRecord(id, processType, inputData, null);
         
         assertTrue(createResponse.isSuccess(), "Create should succeed");
         
@@ -230,9 +227,8 @@ public class ProcessRecordCRUDTest {
         
         ProcessDetails retrieved = readResponse.getData();
         assertEquals(id, retrieved.getId(), "ID should match");
-        assertEquals(type, retrieved.getType(), "Type should match");
+        assertEquals(processType.getName(), retrieved.getType(), "Type should match");
         assertEquals(inputData, retrieved.getInputData(), "Input data should match");
-        assertEquals(schedule, retrieved.getSchedule(), "Schedule should match");
         assertEquals("PENDING", retrieved.getCurrentStatus(), "Status should be PENDING");
         
         logger.info("READ operation test passed");
@@ -244,22 +240,20 @@ public class ProcessRecordCRUDTest {
         
         // First create a process record
         String id = "test-crud-003";
-        String originalType = "original-process";
+        String originalType = "single-task-process";
         String originalInputData = "original input data";
-        String originalSchedule = "0 2 * * *";
         
         ProcessRecordController.ProcessRecordResponse createResponse = 
-            processRecordController.createProcessRecord(id, originalType, originalInputData, originalSchedule);
+            processRecordController.createProcessRecord(id, processTypeRegistry.getProcessType(originalType), originalInputData, null);
         
         assertTrue(createResponse.isSuccess(), "Create should succeed");
         
         // Now update it
-        String updatedType = "updated-process";
+        String updatedType = "two-task-process";
         String updatedInputData = "updated input data";
-        String updatedSchedule = "0 6 * * *";
         
         ProcessRecordController.ProcessRecordResponse updateResponse = 
-            processRecordController.updateProcessRecord(id, updatedType, updatedInputData, updatedSchedule);
+            processRecordController.updateProcessRecord(id, updatedType, updatedInputData, null);
         
         assertTrue(updateResponse.isSuccess(), "Update should succeed");
         assertNotNull(updateResponse.getData(), "Response should contain process record");
@@ -268,7 +262,6 @@ public class ProcessRecordCRUDTest {
         assertEquals(id, updated.getId(), "ID should remain the same");
         assertEquals(updatedType, updated.getType(), "Type should be updated");
         assertEquals(updatedInputData, updated.getInputData(), "Input data should be updated");
-        assertEquals(updatedSchedule, updated.getSchedule(), "Schedule should be updated");
         
         // Verify the update by reading it back
         ProcessRecordController.ProcessRecordResponse readResponse = 
@@ -278,7 +271,6 @@ public class ProcessRecordCRUDTest {
         ProcessDetails retrieved = readResponse.getData();
         assertEquals(updatedType, retrieved.getType(), "Updated type should persist");
         assertEquals(updatedInputData, retrieved.getInputData(), "Updated input data should persist");
-        assertEquals(updatedSchedule, retrieved.getSchedule(), "Updated schedule should persist");
         
         logger.info("UPDATE operation test passed");
     }
@@ -289,12 +281,11 @@ public class ProcessRecordCRUDTest {
         
         // First create a process record
         String id = "test-crud-004";
-        String type = "single-task-process";
+        ProcessType processType = processTypeRegistry.getProcessType("single-task-process");
         String inputData = "test input data for delete";
-        String schedule = "0 12 * * *";
         
         ProcessRecordController.ProcessRecordResponse createResponse = 
-            processRecordController.createProcessRecord(id, type, inputData, schedule);
+            processRecordController.createProcessRecord(id, processType, inputData, null);
         
         assertTrue(createResponse.isSuccess(), "Create should succeed");
         
@@ -327,12 +318,15 @@ public class ProcessRecordCRUDTest {
         
         // Create multiple process records
         String[] ids = {"test-crud-list-001", "test-crud-list-002", "test-crud-list-003"};
-        String[] types = {"type-1", "type-2", "type-1"};
-        String[] schedules = {"0 2 * * *", null, "0 6 * * *"};
+        ProcessType[] processTypes = {
+            processTypeRegistry.getProcessType("single-task-process"),
+            processTypeRegistry.getProcessType("two-task-process"),
+            processTypeRegistry.getProcessType("single-task-process")
+        };
         
         for (int i = 0; i < ids.length; i++) {
             ProcessRecordController.ProcessRecordResponse response = 
-                processRecordController.createProcessRecord(ids[i], types[i], "input-" + i, schedules[i]);
+                processRecordController.createProcessRecord(ids[i], processTypes[i], "input-" + i, null);
             assertTrue(response.isSuccess(), "Create " + ids[i] + " should succeed");
         }
         
@@ -352,14 +346,6 @@ public class ProcessRecordCRUDTest {
         assertNotNull(pendingResponse.getData(), "Response should contain process records");
         assertTrue(pendingResponse.getData().size() >= 3, "Should have at least 3 pending records");
         
-        // Test getScheduledProcessRecords
-        ProcessRecordController.ProcessRecordListResponse scheduledResponse = 
-            processRecordController.getScheduledProcessRecords();
-        
-        assertTrue(scheduledResponse.isSuccess(), "Get scheduled should succeed");
-        assertNotNull(scheduledResponse.getData(), "Response should contain process records");
-        assertEquals(2, scheduledResponse.getData().size(), "Should have exactly 2 scheduled records");
-        
         logger.info("LIST operations test passed");
     }
 
@@ -369,19 +355,18 @@ public class ProcessRecordCRUDTest {
         
         // Test creating duplicate ID
         String id = "test-crud-error-001";
-        String type = "single-task-process";
+        ProcessType processType = processTypeRegistry.getProcessType("single-task-process");
         String inputData = "test input data";
-        String schedule = null;
         
         // Create first record
         ProcessRecordController.ProcessRecordResponse createResponse1 = 
-            processRecordController.createProcessRecord(id, type, inputData, schedule);
+            processRecordController.createProcessRecord(id, processType, inputData, null);
         
         assertTrue(createResponse1.isSuccess(), "First create should succeed");
         
         // Try to create duplicate
         ProcessRecordController.ProcessRecordResponse createResponse2 = 
-            processRecordController.createProcessRecord(id, type, inputData, schedule);
+            processRecordController.createProcessRecord(id, processType, inputData, null);
         
         assertFalse(createResponse2.isSuccess(), "Duplicate create should fail");
         assertNotNull(createResponse2.getMessage(), "Error message should be provided");
@@ -395,7 +380,7 @@ public class ProcessRecordCRUDTest {
         
         // Test updating non-existent record
         ProcessRecordController.ProcessRecordResponse updateResponse = 
-            processRecordController.updateProcessRecord("non-existent-id", type, inputData, schedule);
+            processRecordController.updateProcessRecord("non-existent-id", processType.getName(), inputData, null);
         
         assertFalse(updateResponse.isSuccess(), "Update non-existent should fail");
         

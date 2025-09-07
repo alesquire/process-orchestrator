@@ -119,7 +119,7 @@ public class TaskCompletionTest {
         
         logger.info("Creating process record: {}", processId);
         ProcessRecordController.ProcessRecordResponse createResponse = processRecordController.createProcessRecord(
-            processId, "single-task-process", inputData, null);
+            processId, processTypeRegistry.getProcessType("single-task-process"), inputData, null);
         
         assertTrue(createResponse.isSuccess(), "Process record creation should succeed");
         assertEquals(processId, createResponse.getData().getId());
@@ -199,7 +199,7 @@ public class TaskCompletionTest {
         
         logger.info("Creating process record: {}", processId);
         ProcessRecordController.ProcessRecordResponse createResponse = processRecordController.createProcessRecord(
-            processId, "two-task-process", inputData, null);
+            processId, processTypeRegistry.getProcessType("two-task-process"), inputData, null);
         
         assertTrue(createResponse.isSuccess(), "Process record creation should succeed");
         assertEquals(processId, createResponse.getData().getId());

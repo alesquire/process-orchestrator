@@ -113,10 +113,9 @@ public class TaskErrorStorageTest {
         String recordId = "error-test-record";
         String processType = "failing-process";
         String inputData = "{}";
-        String schedule = null;
         
         ProcessRecordController.ProcessRecordResponse createResponse = 
-            processRecordController.createProcessRecord(recordId, processType, inputData, schedule);
+            processRecordController.createProcessRecord(recordId, processTypeRegistry.getProcessType(processType), inputData, null);
         
         logger.info("Create response success: {}, message: {}", createResponse.isSuccess(), createResponse.getMessage());
         assertTrue(createResponse.isSuccess(), "Process record creation should succeed");

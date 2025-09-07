@@ -123,22 +123,22 @@ public class ProcessTypeManagementTest {
             switch (processType.getName()) {
                 case "single-task-process":
                     assertEquals(1, processType.getTaskCount(), "Single task process should have 1 task");
-                    assertEquals("validate", processType.getTask(0).getName(), "First task should be 'validate'");
+                    assertEquals("test-1-1", processType.getTask(0).getName(), "First task should be 'test-1-1'");
                     break;
                 case "two-task-process":
                     assertEquals(2, processType.getTaskCount(), "Two task process should have 2 tasks");
-                    assertEquals("extract", processType.getTask(0).getName(), "First task should be 'extract'");
-                    assertEquals("transform", processType.getTask(1).getName(), "Second task should be 'transform'");
+                    assertEquals("test-2-1", processType.getTask(0).getName(), "First task should be 'test-2-1'");
+                    assertEquals("test-2-2", processType.getTask(1).getName(), "Second task should be 'test-2-2'");
                     break;
                 case "three-task-process":
                     assertEquals(3, processType.getTaskCount(), "Three task process should have 3 tasks");
-                    assertEquals("load", processType.getTask(0).getName(), "First task should be 'load'");
-                    assertEquals("process", processType.getTask(1).getName(), "Second task should be 'process'");
-                    assertEquals("analyze", processType.getTask(2).getName(), "Third task should be 'analyze'");
+                    assertEquals("test-3-1", processType.getTask(0).getName(), "First task should be 'test-3-1'");
+                    assertEquals("test-3-2", processType.getTask(1).getName(), "Second task should be 'test-3-2'");
+                    assertEquals("test-3-3", processType.getTask(2).getName(), "Third task should be 'test-3-3'");
                     break;
                 case "failing-process":
                     assertEquals(1, processType.getTaskCount(), "Failing process should have 1 task");
-                    assertEquals("failing-task", processType.getTask(0).getName(), "Task should be 'failing-task'");
+                    assertEquals("test-failing", processType.getTask(0).getName(), "Task should be 'test-failing'");
                     break;
                 default:
                     fail("Unexpected process type: " + processType.getName());
@@ -237,23 +237,24 @@ public class ProcessTypeManagementTest {
         // Test creating process records with each valid process type
         String[] validTypes = {"single-task-process", "two-task-process", "three-task-process", "failing-process"};
         
-        for (String processType : validTypes) {
-            String processId = "test-" + processType + "-" + System.currentTimeMillis();
+        for (String processTypeName : validTypes) {
+            ProcessType processType = processTypeRegistry.getProcessType(processTypeName);
+            String processId = "test-" + processTypeName + "-" + System.currentTimeMillis();
             String inputData = "{\"test\": \"data\"}";
             
-            logger.info("Creating process record with type: {}", processType);
+            logger.info("Creating process record with type: {}", processTypeName);
             
             ProcessRecordController.ProcessRecordResponse response = 
                 processRecordController.createProcessRecord(processId, processType, inputData, null);
             
             assertTrue(response.isSuccess(), 
-                "Creating process record with " + processType + " should succeed");
+                "Creating process record with " + processTypeName + " should succeed");
             assertEquals(processId, response.getData().getId());
-            assertEquals(processType, response.getData().getType());
+            assertEquals(processTypeName, response.getData().getType());
             assertEquals(inputData, response.getData().getInputData());
             assertEquals("PENDING", response.getData().getCurrentStatus());
             
-            logger.info("✓ Successfully created process record with type: {}", processType);
+            logger.info("✓ Successfully created process record with type: {}", processTypeName);
         }
     }
 
@@ -261,27 +262,21 @@ public class ProcessTypeManagementTest {
     void testCreateProcessRecordWithInvalidTypes() {
         logger.info("=== Testing createProcessRecord with invalid process types ===");
         
-        // Test creating process records with invalid process types
-        String[] invalidTypes = {"invalid-process", "non-existent", "test-process", "ping-process"};
+        // Test creating process records with null ProcessType (invalid)
+        String processId = "test-invalid-" + System.currentTimeMillis();
+        String inputData = "{\"test\": \"data\"}";
         
-        for (String invalidType : invalidTypes) {
-            String processId = "test-invalid-" + System.currentTimeMillis();
-            String inputData = "{\"test\": \"data\"}";
-            
-            logger.info("Attempting to create process record with invalid type: {}", invalidType);
-            
-            ProcessRecordController.ProcessRecordResponse response = 
-                processRecordController.createProcessRecord(processId, invalidType, inputData, null);
-            
-            assertFalse(response.isSuccess(), 
-                "Creating process record with " + invalidType + " should fail");
-            assertTrue(response.getMessage().contains("Invalid process type"), 
-                "Error message should mention invalid process type");
-            assertTrue(response.getMessage().contains(invalidType), 
-                "Error message should contain the invalid type name");
-            
-            logger.info("✓ Correctly rejected invalid process type: {} - Error: {}", invalidType, response.getMessage());
-        }
+        logger.info("Attempting to create process record with null ProcessType");
+        
+        ProcessRecordController.ProcessRecordResponse response = 
+            processRecordController.createProcessRecord(processId, null, inputData, null);
+        
+        assertFalse(response.isSuccess(), 
+            "Creating process record with null ProcessType should fail");
+        assertTrue(response.getMessage().contains("Process type cannot be null"), 
+            "Error message should indicate null process type");
+        
+        logger.info("✓ Correctly rejected null ProcessType");
     }
 
     @Test

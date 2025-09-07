@@ -31,30 +31,25 @@ public class ProcessRecordController {
     /**
      * Create a new process record with process type validation
      */
-    public ProcessRecordResponse createProcessRecord(String id, String type, String inputData, String schedule) {
+    public ProcessRecordResponse createProcessRecord(String id, ProcessType processType, String inputData, String schedule) {
         try {
-            logger.info("Creating process record: id={}, type={}, schedule={}", id, type, schedule);
-            
             // Validate input
             if (id == null || id.trim().isEmpty()) {
                 return ProcessRecordResponse.error("Process record ID cannot be null or empty");
             }
             
-            if (type == null || type.trim().isEmpty()) {
-                return ProcessRecordResponse.error("Process type cannot be null or empty");
+            if (processType == null) {
+                return ProcessRecordResponse.error("Process type cannot be null");
             }
             
             if (inputData == null || inputData.trim().isEmpty()) {
                 return ProcessRecordResponse.error("Input data cannot be null or empty");
             }
             
-            // Validate process type exists in registry
-            ProcessType processType = processTypeRegistry.getProcessType(type);
-            if (processType == null) {
-                List<String> availableTypes = processTypeRegistry.getAllProcessTypes().keySet().stream()
-                        .collect(java.util.stream.Collectors.toList());
-                return ProcessRecordResponse.error("Invalid process type: '" + type + "'. Available types: " + availableTypes);
-            }
+            logger.info("Creating process record: id={}, type={}, schedule={}", id, processType.getName(), schedule);
+            
+            // Process type is already validated since it's a ProcessType object
+            logger.debug("Using process type: {} with {} tasks", processType.getName(), processType.getTaskCount());
             
             // Check if record already exists
             if (processRecordDAO.exists(id)) {
@@ -62,14 +57,14 @@ public class ProcessRecordController {
             }
             
             // Create the process record
-            ProcessRecord record = new ProcessRecord(id, type, inputData, schedule);
+            ProcessRecord record = new ProcessRecord(id, processType.getName(), inputData, schedule);
             processRecordDAO.create(record);
             
             // Return ProcessDetails with default engine values
             ProcessDetails details = new ProcessDetails(record);
             
             logger.info("Successfully created process record: {} with type: {} ({} tasks)", 
-                id, type, processType.getTaskCount());
+                id, processType.getName(), processType.getTaskCount());
             return ProcessRecordResponse.success(details, "Process record created successfully");
             
         } catch (Exception e) {

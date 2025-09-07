@@ -126,7 +126,7 @@ public class SingleTaskProcessTest {
         
         logger.info("Step 1: Creating ProcessRecord with random input text");
         ProcessRecordController.ProcessRecordResponse createResponse = processRecordController.createProcessRecord(
-            processId, "single-task-process", inputData, null);
+            processId, processTypeRegistry.getProcessType("single-task-process"), inputData, null);
         
         assertTrue(createResponse.isSuccess(), "Process record creation should succeed");
         assertEquals(processId, createResponse.getData().getId());
@@ -266,7 +266,7 @@ public class SingleTaskProcessTest {
         
         logger.info("Step 1: Creating ProcessRecord with random input text");
         ProcessRecordController.ProcessRecordResponse createResponse = processRecordController.createProcessRecord(
-            processId, "two-task-process", inputData, null);
+            processId, processTypeRegistry.getProcessType("two-task-process"), inputData, null);
         
         assertTrue(createResponse.isSuccess(), "Process record creation should succeed");
         assertEquals(processId, createResponse.getData().getId());
@@ -409,7 +409,7 @@ public class SingleTaskProcessTest {
 
         // Create process record
         ProcessRecordController.ProcessRecordResponse createResponse = processRecordController.createProcessRecord(
-            processId, "single-task-process", inputData, null);
+            processId, processTypeRegistry.getProcessType("single-task-process"), inputData, null);
         assertTrue(createResponse.isSuccess(), "Process record creation should succeed");
 
         // Test state transitions

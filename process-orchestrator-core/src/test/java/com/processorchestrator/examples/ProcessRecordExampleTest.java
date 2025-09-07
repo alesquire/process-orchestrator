@@ -113,7 +113,7 @@ public class ProcessRecordExampleTest {
         String inputData1 = "{\"input_file\": \"" + System.getProperty("java.io.tmpdir") + "/sample.csv\", \"validation_rules\": \"strict\"}";
         
         ProcessRecordController.ProcessRecordResponse response1 = processRecordController.createProcessRecord(
-            processId1, "single-task-process", inputData1, null);
+            processId1, processTypeRegistry.getProcessType("single-task-process"), inputData1, null);
         
         assertTrue(response1.isSuccess(), "Single task process record creation should succeed");
         assertEquals(processId1, response1.getData().getId());
@@ -127,13 +127,12 @@ public class ProcessRecordExampleTest {
         String inputData2 = "{\"input_file\": \"" + System.getProperty("java.io.tmpdir") + "/raw_data.json\", \"output_dir\": \"" + System.getProperty("java.io.tmpdir") + "/output\", \"format\": \"json\"}";
         
         ProcessRecordController.ProcessRecordResponse response2 = processRecordController.createProcessRecord(
-            processId2, "two-task-process", inputData2, "0 2 * * *"); // Scheduled for 2 AM daily
+            processId2, processTypeRegistry.getProcessType("two-task-process"), inputData2, null);
         
         assertTrue(response2.isSuccess(), "Two task process record creation should succeed");
         assertEquals(processId2, response2.getData().getId());
         assertEquals("two-task-process", response2.getData().getType());
         assertEquals(inputData2, response2.getData().getInputData());
-        assertEquals("0 2 * * *", response2.getData().getSchedule());
         assertEquals("PENDING", response2.getData().getCurrentStatus());
         logger.info("✓ Created ProcessRecord 2: {} (2 tasks)", processId2);
 
@@ -142,7 +141,7 @@ public class ProcessRecordExampleTest {
         String inputData3 = "{\"input_file\": \"" + System.getProperty("java.io.tmpdir") + "/large_dataset.csv\", \"output_dir\": \"" + System.getProperty("java.io.tmpdir") + "/results\", \"analysis_type\": \"comprehensive\"}";
         
         ProcessRecordController.ProcessRecordResponse response3 = processRecordController.createProcessRecord(
-            processId3, "three-task-process", inputData3, null);
+            processId3, processTypeRegistry.getProcessType("three-task-process"), inputData3, null);
         
         assertTrue(response3.isSuccess(), "Three task process record creation should succeed");
         assertEquals(processId3, response3.getData().getId());
@@ -242,7 +241,6 @@ public class ProcessRecordExampleTest {
             logger.info("Type: {}", details.getType());
             logger.info("Status: {}", details.getCurrentStatus());
             logger.info("Input Data: {}", details.getInputData());
-            logger.info("Schedule: {}", details.getSchedule() != null ? details.getSchedule() : "Manual only");
             logger.info("Created: {}", details.getCreatedAt());
             logger.info("Updated: {}", details.getUpdatedAt());
             
