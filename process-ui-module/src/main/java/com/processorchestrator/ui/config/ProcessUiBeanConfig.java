@@ -2,9 +2,11 @@ package com.processorchestrator.ui.config;
 
 import com.processorchestrator.config.ProcessTypeRegistry;
 import com.processorchestrator.config.ProcessTypeInitializer;
+import com.processorchestrator.controller.ProcessController;
 import com.processorchestrator.dao.ProcessRecordDAO;
 import com.processorchestrator.service.ProcessOrchestrator;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -51,5 +53,31 @@ public class ProcessUiBeanConfig {
     @Primary
     public ProcessOrchestrator processOrchestrator() {
         return new ProcessOrchestrator(dataSource, processTypeRegistry());
+    }
+
+    /**
+     * Create ProcessController bean
+     */
+    @Bean
+    @Primary
+    public ProcessController processController() {
+        return new ProcessController(processRecordDAO(), processOrchestrator(), processTypeRegistry());
+    }
+
+    /**
+     * Start the ProcessOrchestrator scheduler when the application starts
+     */
+    @Bean
+    public ApplicationRunner schedulerStarter(ProcessOrchestrator processOrchestrator) {
+        return args -> {
+            System.out.println("Starting ProcessOrchestrator scheduler...");
+            try {
+                processOrchestrator.start();
+                System.out.println("ProcessOrchestrator scheduler started successfully");
+            } catch (Exception e) {
+                System.err.println("Failed to start ProcessOrchestrator scheduler: " + e.getMessage());
+                e.printStackTrace();
+            }
+        };
     }
 }

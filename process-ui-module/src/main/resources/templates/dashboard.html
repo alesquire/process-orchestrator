@@ -247,7 +247,7 @@
                 .catch(error => {
                     console.error('Error fetching processes:', error);
                     document.getElementById('processTableBody').innerHTML = 
-                        '<tr><td colspan="' + (4 + taskNames.length) + '" class="text-center text-danger">Error loading data</td></tr>';
+                        '<tr><td colspan="' + (5 + taskNames.length) + '" class="text-center text-danger">Error loading data</td></tr>';
                 });
         }
 
@@ -258,10 +258,11 @@
             // Completely regenerate the table header to handle dynamic task columns
             thead.innerHTML = `
                 <tr>
-                    <th colspan="4" class="text-center bg-primary text-white">Process Parameters</th>
+                    <th colspan="5" class="text-center bg-primary text-white">Process Parameters</th>
                     <th id="taskColumnsHeader" colspan="${taskNames.length}" class="text-center bg-success text-white">Task Parameters (${taskNames.length} types)</th>
                 </tr>
                 <tr>
+                    <th>Actions</th>
                     <th>ID</th>
                     <th>Name</th>
                     <th>Type</th>
@@ -276,7 +277,7 @@
             tbody.innerHTML = '';
 
             if (data.processes.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="' + (4 + taskNames.length) + '" class="text-center text-muted">No process records found</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="' + (5 + taskNames.length) + '" class="text-center text-muted">No process records found</td></tr>';
                 return;
             }
 
@@ -292,6 +293,7 @@
                 });
 
                 row.innerHTML = `
+                    <td class="text-center">${getActionButtons(process.currentStatus, process.id)}</td>
                     <td class="process-id">${process.id}</td>
                     <td>${process.id}</td>
                     <td>${process.type}</td>
@@ -344,6 +346,122 @@
                 case 'STOPPED': return 'status-stopped';
                 default: return 'status-pending';
             }
+        }
+
+        function getActionButtons(status, processId) {
+            let buttons = '';
+            
+            // Start button - available for PENDING, COMPLETED, FAILED, STOPPED
+            if (status === 'PENDING' || status === 'COMPLETED' || status === 'FAILED' || status === 'STOPPED') {
+                buttons += '<button class="btn btn-success btn-sm me-1" onclick="startProcess(\'' + processId + '\')" title="Start process from beginning">' +
+                    '<i class="fas fa-play"></i>' +
+                '</button>';
+            }
+            
+            // Stop button - available for IN_PROGRESS
+            if (status === 'IN_PROGRESS') {
+                buttons += '<button class="btn btn-danger btn-sm me-1" onclick="stopProcess(\'' + processId + '\')" title="Stop process immediately">' +
+                    '<i class="fas fa-stop"></i>' +
+                '</button>';
+            }
+            
+            // Continue/Restart button - available for FAILED, STOPPED
+            if (status === 'FAILED' || status === 'STOPPED') {
+                buttons += '<button class="btn btn-warning btn-sm" onclick="restartProcess(\'' + processId + '\')" title="Continue from failed/stopped task">' +
+                    '<i class="fas fa-redo"></i>' +
+                '</button>';
+            }
+            
+            return buttons || '<span class="text-muted">-</span>';
+        }
+
+        function startProcess(processId) {
+            fetch('/api/processes/' + processId + '/start', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('success', 'Process started successfully: ' + data.message);
+                    refreshData(); // Refresh the table
+                } else {
+                    showAlert('danger', 'Failed to start process: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error starting process:', error);
+                showAlert('danger', 'Error starting process: ' + error.message);
+            });
+        }
+
+        function stopProcess(processId) {
+            fetch('/api/processes/' + processId + '/stop', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('success', 'Process stopped successfully: ' + data.message);
+                    refreshData(); // Refresh the table
+                } else {
+                    showAlert('danger', 'Failed to stop process: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error stopping process:', error);
+                showAlert('danger', 'Error stopping process: ' + error.message);
+            });
+        }
+
+        function restartProcess(processId) {
+            fetch('/api/processes/' + processId + '/restart', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('success', 'Process restarted successfully: ' + data.message);
+                    refreshData(); // Refresh the table
+                } else {
+                    showAlert('danger', 'Failed to restart process: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error restarting process:', error);
+                showAlert('danger', 'Error restarting process: ' + error.message);
+            });
+        }
+
+        function showAlert(type, message) {
+            // Create alert element
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'alert alert-' + type + ' alert-dismissible fade show';
+            alertDiv.style.position = 'fixed';
+            alertDiv.style.top = '20px';
+            alertDiv.style.right = '20px';
+            alertDiv.style.zIndex = '9999';
+            alertDiv.style.minWidth = '300px';
+            
+            alertDiv.innerHTML = message + 
+                '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+            
+            document.body.appendChild(alertDiv);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.parentNode.removeChild(alertDiv);
+                }
+            }, 5000);
         }
 
         function formatDate(dateString) {

@@ -10,6 +10,10 @@ import com.processorchestrator.config.ProcessTypeRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -27,11 +31,13 @@ public class ProcessController {
     private final ProcessRecordDAO processRecordDAO;
     private final ProcessOrchestrator processOrchestrator;
     private final ProcessTypeRegistry processTypeRegistry;
+    private final DataSource dataSource;
 
     public ProcessController(ProcessRecordDAO processRecordDAO, ProcessOrchestrator processOrchestrator, ProcessTypeRegistry processTypeRegistry) {
         this.processRecordDAO = processRecordDAO;
         this.processOrchestrator = processOrchestrator;
         this.processTypeRegistry = processTypeRegistry;
+        this.dataSource = processOrchestrator.getDataSource();
     }
 
     // ==================== PROCESS EXECUTION MANAGEMENT ====================
@@ -61,6 +67,12 @@ public class ProcessController {
             
             // Generate unique process ID for this execution
             String processId = generateProcessId(processRecordId);
+            
+            // Cancel any existing scheduled tasks for this process record
+            processOrchestrator.cancelExistingTasks(processRecordId);
+            
+            // Reset task states for this process record before starting
+            resetTaskStates(processRecordId);
             
             // Update process record status
             processRecordDAO.updateStatus(processRecordId, "IN_PROGRESS", Instant.now(), null);
@@ -183,6 +195,32 @@ public class ProcessController {
         
         // Start the process
         return startProcess(processRecordId);
+    }
+
+    /**
+     * Reset task states for a process record (set all tasks to PENDING)
+     */
+    private void resetTaskStates(String processRecordId) {
+        logger.info("Resetting task states for process record: {}", processRecordId);
+        
+        try {
+            String sql = "UPDATE tasks SET status = 'PENDING', started_at = NULL, completed_at = NULL, " +
+                        "exit_code = NULL, output = NULL, error_message = NULL, retry_count = 0, updated_at = ? " +
+                        "WHERE process_record_id = ?";
+            
+            try (var connection = dataSource.getConnection();
+                 var statement = connection.prepareStatement(sql)) {
+                
+                statement.setTimestamp(1, Timestamp.from(Instant.now()));
+                statement.setString(2, processRecordId);
+                
+                int rowsAffected = statement.executeUpdate();
+                logger.info("Reset {} task states for process record: {}", rowsAffected, processRecordId);
+            }
+        } catch (Exception e) {
+            logger.error("Failed to reset task states for process record: {}", processRecordId, e);
+            // Don't throw exception here as it's not critical for process start
+        }
     }
 
     /**

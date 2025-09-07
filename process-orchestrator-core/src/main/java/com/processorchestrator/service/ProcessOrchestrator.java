@@ -132,19 +132,101 @@ public class ProcessOrchestrator {
         logger.info("Executing process: {}", processId);
         
         try {
-        // Mark process as started
-        processData.markAsStarted();
-        
-        // Persist process data
-        // Save process data (simplified - no longer using ProcessResultService)
-        logger.info("Process {} started with {} tasks", processData.getProcessId(), processData.getTasks().size());
-        
-        // Execute current task
-        executeCurrentTask(processData, context);
+            // Mark process as started
+            processData.markAsStarted();
+            
+            // Persist process data
+            // Save process data (simplified - no longer using ProcessResultService)
+            logger.info("Process {} started with {} tasks", processData.getProcessId(), processData.getTasks().size());
+            
+            // Execute current task
+            executeCurrentTask(processData, context);
             
         } catch (Exception e) {
             logger.error("Error executing process: {}", processId, e);
             processData.markAsFailed("Process execution error: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Cancel existing scheduled tasks for a process record
+     * This prevents conflicts when restarting a process
+     */
+    public void cancelExistingTasks(String processRecordId) {
+        logger.info("Canceling existing tasks for process record: {}", processRecordId);
+        
+        try {
+            String sql = "DELETE FROM scheduled_tasks WHERE task_instance LIKE ?";
+            
+            try (var connection = dataSource.getConnection();
+                 var statement = connection.prepareStatement(sql)) {
+                
+                statement.setString(1, processRecordId + "%");
+                
+                int deletedTasks = statement.executeUpdate();
+                logger.info("Canceled {} existing scheduled tasks for process record: {}", deletedTasks, processRecordId);
+            }
+        } catch (Exception e) {
+            logger.error("Failed to cancel existing tasks for process record: {}", processRecordId, e);
+            // Don't throw exception, just log the error
+        }
+    }
+
+    /**
+     * Reset the current task index based on database task states
+     * This ensures that when a process is restarted, it starts from the first PENDING task
+     * Only resets if there are existing tasks in the database (for restarted processes)
+     */
+    private void resetCurrentTaskIndexFromDatabase(ProcessData processData) {
+        if (processData.getProcessRecordId() == null) {
+            logger.debug("No process record ID, skipping task index reset");
+            return;
+        }
+        
+        try {
+            // First check if there are any tasks for this process record
+            String countSql = "SELECT COUNT(*) as task_count FROM tasks WHERE process_record_id = ?";
+            int taskCount = 0;
+            
+            try (var connection = dataSource.getConnection();
+                 var countStatement = connection.prepareStatement(countSql)) {
+                
+                countStatement.setString(1, processData.getProcessRecordId());
+                
+                try (var countResult = countStatement.executeQuery()) {
+                    if (countResult.next()) {
+                        taskCount = countResult.getInt("task_count");
+                    }
+                }
+            }
+            
+            // Only reset if there are existing tasks (restarted process)
+            if (taskCount > 0) {
+                String sql = "SELECT MIN(task_index) as first_pending_index FROM tasks " +
+                            "WHERE process_record_id = ? AND status = 'PENDING'";
+                
+                try (var connection = dataSource.getConnection();
+                     var statement = connection.prepareStatement(sql)) {
+                    
+                    statement.setString(1, processData.getProcessRecordId());
+                    
+                    try (var resultSet = statement.executeQuery()) {
+                        if (resultSet.next()) {
+                            int firstPendingIndex = resultSet.getInt("first_pending_index");
+                            if (!resultSet.wasNull() && firstPendingIndex != processData.getCurrentTaskIndex()) {
+                                logger.info("Resetting process {} task index from {} to {} based on database state", 
+                                           processData.getProcessId(), processData.getCurrentTaskIndex(), firstPendingIndex);
+                                processData.setCurrentTaskIndex(firstPendingIndex);
+                            }
+                        }
+                    }
+                }
+            } else {
+                logger.debug("No existing tasks found for process record {}, skipping task index reset", processData.getProcessRecordId());
+            }
+        } catch (Exception e) {
+            logger.error("Failed to reset current task index for process: {}", processData.getProcessId(), e);
+            // Don't throw exception, just log the error
         }
     }
 
@@ -260,13 +342,19 @@ public class ProcessOrchestrator {
         String taskId = taskData.getTaskId();
         
         logger.info("Executing CLI task: {}", taskId);
+        logger.info("Task command: {}", taskData.getCommand());
+        logger.info("Task working directory: {}", taskData.getWorkingDirectory());
         
         try {
             // Build command with context
             String command = buildCommandWithContext(taskData, taskInstance.getData());
+            logger.info("Built command: {}", command);
             
             // Execute the CLI command
             CLITaskExecutor.ExecutionResult result = taskExecutor.execute(taskData, command);
+            
+            logger.info("Task {} execution result - Success: {}, Exit Code: {}, Output: {}, Error: {}", 
+                       taskId, result.isSuccess(), result.getExitCode(), result.getOutput(), result.getErrorMessage());
             
             if (result.isSuccess()) {
                 logger.info("CLI task {} completed successfully", taskId);
@@ -571,6 +659,13 @@ public class ProcessOrchestrator {
      */
     private ProcessData getProcessDataFromScheduler(String processId) {
         return processDataCache.get(processId);
+    }
+
+    /**
+     * Get the DataSource used by this orchestrator
+     */
+    public DataSource getDataSource() {
+        return dataSource;
     }
 
     /**

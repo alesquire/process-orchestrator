@@ -56,6 +56,74 @@ public class ProcessUiController {
         @Autowired
         private ProcessTypeRegistry processTypeRegistry;
 
+        @Autowired
+        private com.processorchestrator.controller.ProcessController processController;
+
+        @PostMapping("/processes/{processId}/start")
+        public Map<String, Object> startProcess(@PathVariable("processId") String processId) {
+            try {
+                com.processorchestrator.controller.ProcessController.ProcessStartResponse response = 
+                    processController.startProcess(processId);
+                
+                Map<String, Object> result = new HashMap<>();
+                result.put("success", response.isSuccess());
+                result.put("message", response.getMessage());
+                if (response.isSuccess()) {
+                    result.put("processId", response.getProcessId());
+                    result.put("orchestratorProcessId", response.getOrchestratorProcessId());
+                }
+                return result;
+            } catch (Exception e) {
+                Map<String, Object> result = new HashMap<>();
+                result.put("success", false);
+                result.put("message", "Error starting process: " + e.getMessage());
+                return result;
+            }
+        }
+
+        @PostMapping("/processes/{processId}/stop")
+        public Map<String, Object> stopProcess(@PathVariable("processId") String processId) {
+            try {
+                com.processorchestrator.controller.ProcessController.ProcessStopResponse response = 
+                    processController.stopProcess(processId);
+                
+                Map<String, Object> result = new HashMap<>();
+                result.put("success", response.isSuccess());
+                result.put("message", response.getMessage());
+                if (response.isSuccess()) {
+                    result.put("processId", response.getProcessId());
+                }
+                return result;
+            } catch (Exception e) {
+                Map<String, Object> result = new HashMap<>();
+                result.put("success", false);
+                result.put("message", "Error stopping process: " + e.getMessage());
+                return result;
+            }
+        }
+
+        @PostMapping("/processes/{processId}/restart")
+        public Map<String, Object> restartProcess(@PathVariable("processId") String processId) {
+            try {
+                com.processorchestrator.controller.ProcessController.ProcessStartResponse response = 
+                    processController.restartProcess(processId);
+                
+                Map<String, Object> result = new HashMap<>();
+                result.put("success", response.isSuccess());
+                result.put("message", response.getMessage());
+                if (response.isSuccess()) {
+                    result.put("processId", response.getProcessId());
+                    result.put("orchestratorProcessId", response.getOrchestratorProcessId());
+                }
+                return result;
+            } catch (Exception e) {
+                Map<String, Object> result = new HashMap<>();
+                result.put("success", false);
+                result.put("message", "Error restarting process: " + e.getMessage());
+                return result;
+            }
+        }
+
         @GetMapping("/task-details/{taskId}")
         public Map<String, Object> getTaskDetails(@PathVariable("taskId") String taskId) {
             System.out.println("DEBUG: Requested task ID: " + taskId);

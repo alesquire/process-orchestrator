@@ -18,22 +18,22 @@ public class ProcessTypeInitializer {
 
         // Single Task Process
         ProcessType singleTaskProcess = new ProcessType("single-task-process", "Process with one task")
-                .addTask("test-1-1", "java -cp " + System.getProperty("user.dir") + "/target/classes com.processorchestrator.util.MessagePrinter \"Validating data from ${input_file}\"", System.getProperty("java.io.tmpdir"), 30, 2);
+                .addTask("test-1-1", "java -cp ../process-orchestrator-core/target/classes com.processorchestrator.util.MessagePrinter \"Validating data from ${input_file}\"", System.getProperty("user.dir"), 30, 2);
         registry.register(singleTaskProcess);
         logger.debug("Registered single-task-process with {} tasks", singleTaskProcess.getTaskCount());
 
         // Two Task Process  
         ProcessType twoTaskProcess = new ProcessType("two-task-process", "Process with two tasks")
-                .addTask("test-2-1", "java -cp " + System.getProperty("user.dir") + "/target/classes com.processorchestrator.util.MessagePrinter \"Extracting data from ${input_file} to ${output_dir}\"", System.getProperty("java.io.tmpdir"), 45, 2)
-                .addTask("test-2-2", "java -cp " + System.getProperty("user.dir") + "/target/classes com.processorchestrator.util.MessagePrinter \"Transforming data from ${output_dir}/extracted.json to ${output_dir}/transformed.json\"", System.getProperty("java.io.tmpdir"), 60, 3);
+                .addTask("test-2-1", "java -cp ../process-orchestrator-core/target/classes com.processorchestrator.util.MessagePrinter \"Extracting data from ${input_file} to ${output_dir}\"", System.getProperty("user.dir"), 45, 2)
+                .addTask("test-2-2", "java -cp ../process-orchestrator-core/target/classes com.processorchestrator.util.MessagePrinter \"Transforming data from ${output_dir}/extracted.json to ${output_dir}/transformed.json\"", System.getProperty("user.dir"), 60, 3);
         registry.register(twoTaskProcess);
         logger.debug("Registered two-task-process with {} tasks", twoTaskProcess.getTaskCount());
 
         // Three Task Process
         ProcessType threeTaskProcess = new ProcessType("three-task-process", "Process with three tasks")
-                .addTask("test-3-1", "java -cp " + System.getProperty("user.dir") + "/target/classes com.processorchestrator.util.MessagePrinter \"Loading data from ${input_file} to ${output_dir}/loaded.json\"", System.getProperty("java.io.tmpdir"), 30, 2)
-                .addTask("test-3-2", "java -cp " + System.getProperty("user.dir") + "/target/classes com.processorchestrator.util.MessagePrinter \"Processing data from ${output_dir}/loaded.json to ${output_dir}/processed.json\"", System.getProperty("java.io.tmpdir"), 60, 3)
-                .addTask("test-3-3", "java -cp " + System.getProperty("user.dir") + "/target/classes com.processorchestrator.util.MessagePrinter \"Analyzing data from ${output_dir}/processed.json to ${output_dir}/analysis.json\"", System.getProperty("java.io.tmpdir"), 45, 2);
+                .addTask("test-3-1", "java -cp ../process-orchestrator-core/target/classes com.processorchestrator.util.MessagePrinter \"Loading data from ${input_file} to ${output_dir}/loaded.json\"", System.getProperty("user.dir"), 30, 2)
+                .addTask("test-3-2", "java -cp ../process-orchestrator-core/target/classes com.processorchestrator.util.MessagePrinter \"Processing data from ${output_dir}/loaded.json to ${output_dir}/processed.json\"", System.getProperty("user.dir"), 60, 3)
+                .addTask("test-3-3", "java -cp ../process-orchestrator-core/target/classes com.processorchestrator.util.MessagePrinter \"Analyzing data from ${output_dir}/processed.json to ${output_dir}/analysis.json\"", System.getProperty("user.dir"), 45, 2);
         registry.register(threeTaskProcess);
         logger.debug("Registered three-task-process with {} tasks", threeTaskProcess.getTaskCount());
 
