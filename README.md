@@ -20,6 +20,7 @@ The Process Orchestrator is organized into multiple modules:
 
 - **`process-orchestrator-core`**: Core orchestration functionality
 - **`db-scheduler-ui-module`**: Web-based dashboard for monitoring and managing tasks
+- **`process-ui-module`**: Custom tabular dashboard for visualizing processes and tasks
 
 ## Web UI Dashboard
 
@@ -268,6 +269,54 @@ Commands support variable substitution:
 - **Monitoring**: Implement health checks and metrics collection
 - **Logging**: Configure appropriate log levels and retention
 - **Security**: Secure database connections and file system access
+
+## Process UI Dashboard
+
+The system also includes a custom tabular dashboard (`process-ui-module`) that provides:
+
+- **Tabular Process View**: Processes displayed as rows, tasks as columns
+- **Real-time Status Updates**: Auto-refresh every 5 seconds
+- **Process Statistics**: Overview cards showing process counts by status
+- **Status Badges**: Color-coded status indicators
+- **Responsive Design**: Bootstrap-based UI for desktop and mobile
+
+### Starting the Process UI
+
+```bash
+# Option 1: Using the provided scripts
+./start-process-ui.bat       # Windows Batch
+./start-process-ui.sh        # Git Bash
+
+# Option 2: Using Maven directly
+cd process-ui-module
+mvn spring-boot:run
+```
+
+The Process UI will be available at: `http://localhost:8082`
+
+### Process UI Features
+
+- **Process Table**: Shows all processes with their task statuses in a tabular format
+- **Statistics Dashboard**: Real-time counts of total, completed, in-progress, and failed processes
+- **Auto-refresh**: Configurable automatic data refresh
+- **Security**: HTTP Basic authentication with admin/user roles
+
+### Process UI Configuration
+
+```properties
+# Server Configuration
+server.port=8082
+
+# Security Configuration
+spring.security.user.name=admin
+spring.security.user.password=admin123
+spring.security.user.roles=ADMIN
+
+# Database Configuration (inherited from core module)
+spring.datasource.url=jdbc:postgresql://localhost:5432/process_orchestrator
+spring.datasource.username=postgres
+spring.datasource.password=your-super-secret-and-long-postgres-password
+```
 
 ## Dependencies
 

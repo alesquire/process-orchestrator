@@ -15,6 +15,7 @@
     <modules>
         <module>process-orchestrator-core</module>
         <module>db-scheduler-ui-module</module>
+        <module>process-ui-module</module>
     </modules>
 
     <properties>
