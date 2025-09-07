@@ -68,7 +68,6 @@
             <groupId>io.rocketbase.extension</groupId>
             <artifactId>db-scheduler-log-spring-boot-starter</artifactId>
             <version>0.7.0</version>
-            <optional>true</optional>
         </dependency>
 
         <!-- Database dependencies for UI -->
