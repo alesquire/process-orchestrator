@@ -11,7 +11,61 @@ A robust process orchestration system built on top of `db-scheduler` that enable
 - **CLI Task Execution**: Execute command-line utilities with cross-platform support
 - **Result Persistence**: Complete audit trail of all process and task executions
 - **Parallel Process Support**: Multiple processes can run concurrently
+- **Web UI Dashboard**: Monitor and manage tasks through a web-based interface
 - **Scalable**: Designed to handle 5000+ processes with 10+ tasks each
+
+## Project Structure
+
+The Process Orchestrator is organized into multiple modules:
+
+- **`process-orchestrator-core`**: Core orchestration functionality
+- **`db-scheduler-ui-module`**: Web-based dashboard for monitoring and managing tasks
+
+## Web UI Dashboard
+
+The system includes a web-based dashboard powered by [db-scheduler-ui](https://github.com/bekk/db-scheduler-ui) that provides:
+
+- **Task Monitoring**: View scheduled, running, and failed tasks
+- **Task Management**: Manually run, retry, or delete tasks
+- **Task History**: View execution history of all tasks
+- **Real-time Updates**: Live status updates
+- **Security**: Optional authentication and role-based access
+
+### Starting the UI
+
+```bash
+# Option 1: Using the provided scripts
+./start-ui.bat          # Windows Batch
+./start-ui.ps1          # PowerShell
+./start-ui.sh           # Git Bash
+
+# Option 2: Using Maven directly
+cd db-scheduler-ui-module
+mvn spring-boot:run
+```
+
+The UI will be available at: `http://localhost:8080/db-scheduler`
+
+### UI Configuration
+
+Configure the UI via `db-scheduler-ui-module/src/main/resources/application.properties`:
+
+```properties
+# Enable task history
+db-scheduler-ui.history=true
+db-scheduler-ui.log-limit=1000
+
+# Show task data in UI
+db-scheduler-ui.task-data=true
+
+# Read-only mode
+db-scheduler-ui.read-only=false
+
+# Optional: Enable security
+spring.security.user.name=admin
+spring.security.user.password=admin123
+spring.security.user.roles=ADMIN
+```
 
 ## Architecture
 

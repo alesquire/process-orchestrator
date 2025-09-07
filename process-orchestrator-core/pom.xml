@@ -4,18 +4,17 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.processorchestrator</groupId>
-    <artifactId>process-orchestrator</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
-    <packaging>pom</packaging>
+    <parent>
+        <groupId>com.processorchestrator</groupId>
+        <artifactId>process-orchestrator</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
 
-    <name>Process Orchestrator</name>
-    <description>A process orchestrator based on db-scheduler for managing sequential task execution</description>
+    <artifactId>process-orchestrator-core</artifactId>
+    <packaging>jar</packaging>
 
-    <modules>
-        <module>process-orchestrator-core</module>
-        <module>db-scheduler-ui-module</module>
-    </modules>
+    <name>Process Orchestrator Core</name>
+    <description>Core process orchestrator functionality based on db-scheduler</description>
 
     <properties>
         <maven.compiler.source>17</maven.compiler.source>
@@ -123,11 +122,9 @@
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.1.0</version>
                 <configuration>
-                    <mainClass>com.processorchestrator.Main</mainClass>
+                    <mainClass>com.processorchestrator.ProcessOrchestratorApp</mainClass>
                 </configuration>
             </plugin>
         </plugins>
     </build>
 </project>
-
-
