@@ -1,0 +1,558 @@
+openapi: 3.0.3
+info:
+  title: Process Orchestrator API
+  description: |
+    A comprehensive API for managing process orchestration with sequential task execution.
+    This system allows you to create, manage, and monitor processes that execute tasks in sequence.
+  version: 1.0.0
+  contact:
+    name: Process Orchestrator Team
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8081
+    description: Process Orchestrator Core API
+  - url: http://localhost:8082
+    description: Process UI Module API
+
+tags:
+  - name: Process Records
+    description: Operations for managing process records
+  - name: Process Types
+    description: Operations for managing process types and task definitions
+  - name: Process UI
+    description: UI-specific endpoints for dashboard and task details
+  - name: Debug
+    description: Debug endpoints for development
+
+paths:
+  # Process Record Operations (Core API)
+  /process-records:
+    post:
+      tags:
+        - Process Records
+      summary: Create a new process record
+      description: Creates a new process record with the specified type and input data
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - id
+                - type
+                - inputData
+              properties:
+                id:
+                  type: string
+                  description: Unique identifier for the process record
+                  example: "example-process-001"
+                type:
+                  type: string
+                  description: Process type name
+                  enum: ["single-task-process", "two-task-process", "three-task-process", "failing-process"]
+                  example: "single-task-process"
+                inputData:
+                  type: string
+                  description: Input data for the process
+                  example: "Sample input data"
+      responses:
+        '200':
+          description: Process record created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessRecordResponse'
+        '400':
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      tags:
+        - Process Records
+      summary: Get all process records
+      description: Retrieves all process records with optional filtering
+      parameters:
+        - name: status
+          in: query
+          description: Filter by process status
+          schema:
+            type: string
+            enum: ["PENDING", "IN_PROGRESS", "COMPLETED", "FAILED", "STOPPED"]
+        - name: type
+          in: query
+          description: Filter by process type
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of process records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProcessRecord'
+
+  /process-records/{id}:
+    get:
+      tags:
+        - Process Records
+      summary: Get process record by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Process record found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessRecord'
+        '404':
+          description: Process record not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags:
+        - Process Records
+      summary: Update process record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                inputData:
+                  type: string
+                  description: Updated input data
+                schedule:
+                  type: string
+                  description: Updated schedule (cron expression)
+      responses:
+        '200':
+          description: Process record updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessRecordResponse'
+        '404':
+          description: Process record not found
+
+    delete:
+      tags:
+        - Process Records
+      summary: Delete process record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Process record deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessRecordResponse'
+        '404':
+          description: Process record not found
+
+  /process-records/{id}/start:
+    post:
+      tags:
+        - Process Records
+      summary: Start a process
+      description: Initiates execution of a process record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Process started successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessRecordResponse'
+        '404':
+          description: Process record not found
+        '400':
+          description: Process cannot be started (invalid state)
+
+  /process-records/{id}/stop:
+    post:
+      tags:
+        - Process Records
+      summary: Stop a process
+      description: Stops execution of a running process
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Process stopped successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessRecordResponse'
+        '404':
+          description: Process record not found
+
+  /process-types:
+    get:
+      tags:
+        - Process Types
+      summary: Get available process types
+      description: Retrieves all available process types and their task definitions
+      responses:
+        '200':
+          description: List of available process types
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessTypesResponse'
+
+  # Process UI Module Endpoints
+  /api/processes:
+    get:
+      tags:
+        - Process UI
+      summary: Get processes for UI dashboard
+      description: Retrieves processes with their tasks in a format suitable for tabular display
+      responses:
+        '200':
+          description: Process data for dashboard
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessDashboardResponse'
+
+  /api/process-types:
+    get:
+      tags:
+        - Process UI
+      summary: Get process types for UI
+      description: Retrieves process types formatted for UI consumption
+      responses:
+        '200':
+          description: Process types for UI
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessTypesResponse'
+
+  /api/processes/{processId}:
+    get:
+      tags:
+        - Process UI
+      summary: Get process details for UI
+      parameters:
+        - name: processId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Process details with tasks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessDetailResponse'
+
+  /api/task-details/{taskId}:
+    get:
+      tags:
+        - Process UI
+      summary: Get task details
+      description: Retrieves detailed information about a specific task
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskDetails'
+
+  /api/debug/task-ids:
+    get:
+      tags:
+        - Debug
+      summary: Get all task IDs (debug endpoint)
+      description: Retrieves all task IDs from the database for debugging purposes
+      responses:
+        '200':
+          description: List of task IDs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+
+components:
+  schemas:
+    ProcessRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique process record identifier
+        type:
+          type: string
+          description: Process type name
+        inputData:
+          type: string
+          description: Input data for the process
+        schedule:
+          type: string
+          description: Cron schedule expression (optional)
+        currentStatus:
+          type: string
+          enum: ["PENDING", "IN_PROGRESS", "COMPLETED", "FAILED", "STOPPED"]
+          description: Current process status
+        currentTaskIndex:
+          type: integer
+          description: Index of currently executing task
+        totalTasks:
+          type: integer
+          description: Total number of tasks in the process
+        startedWhen:
+          type: string
+          format: date-time
+          description: When the process was started
+        completedWhen:
+          type: string
+          format: date-time
+          description: When the process was completed
+        failedWhen:
+          type: string
+          format: date-time
+          description: When the process failed
+        stoppedWhen:
+          type: string
+          format: date-time
+          description: When the process was stopped
+        lastErrorMessage:
+          type: string
+          description: Last error message (if any)
+        triggeredBy:
+          type: string
+          description: What triggered this process
+        createdAt:
+          type: string
+          format: date-time
+          description: When the process record was created
+        updatedAt:
+          type: string
+          format: date-time
+          description: When the process record was last updated
+
+    ProcessRecordResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Whether the operation was successful
+        message:
+          type: string
+          description: Response message
+        processRecord:
+          $ref: '#/components/schemas/ProcessRecord'
+        error:
+          type: string
+          description: Error message (if any)
+
+    ProcessType:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Process type name
+        description:
+          type: string
+          description: Process type description
+        taskCount:
+          type: integer
+          description: Number of tasks in this process type
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskDefinition'
+
+    TaskDefinition:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Task name
+        command:
+          type: string
+          description: Command to execute
+        workingDirectory:
+          type: string
+          description: Working directory for the command
+        timeoutMinutes:
+          type: integer
+          description: Timeout in minutes
+        maxRetries:
+          type: integer
+          description: Maximum number of retries
+
+    ProcessTypesResponse:
+      type: object
+      properties:
+        processTypes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProcessType'
+        allTaskNames:
+          type: array
+          items:
+            type: string
+          description: All unique task names across all process types
+
+    ProcessDashboardResponse:
+      type: object
+      properties:
+        processes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProcessRecord'
+        processTasks:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              $ref: '#/components/schemas/TaskData'
+          description: Map of process ID to its tasks
+        taskNames:
+          type: array
+          items:
+            type: string
+          description: All unique task names for table headers
+
+    TaskData:
+      type: object
+      properties:
+        taskId:
+          type: string
+          description: Unique task identifier
+        processId:
+          type: string
+          description: Process identifier
+        name:
+          type: string
+          description: Task name
+        command:
+          type: string
+          description: Command to execute
+        workingDirectory:
+          type: string
+          description: Working directory
+        timeoutMinutes:
+          type: integer
+          description: Timeout in minutes
+        maxRetries:
+          type: integer
+          description: Maximum retries
+        retryCount:
+          type: integer
+          description: Current retry count
+        status:
+          type: string
+          enum: ["PENDING", "IN_PROGRESS", "COMPLETED", "FAILED"]
+          description: Task status
+        startedAt:
+          type: string
+          format: date-time
+          description: When the task was started
+        completedAt:
+          type: string
+          format: date-time
+          description: When the task was completed
+        errorMessage:
+          type: string
+          description: Error message (if any)
+        exitCode:
+          type: integer
+          description: Exit code from command execution
+        output:
+          type: string
+          description: Command output
+
+    ProcessDetailResponse:
+      type: object
+      properties:
+        process:
+          $ref: '#/components/schemas/ProcessRecord'
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskData'
+
+    TaskDetails:
+      type: object
+      additionalProperties: true
+      description: Task details from the database
+      example:
+        task_id: "example-process-001-task-0"
+        process_record_id: "example-process-001"
+        task_index: 0
+        task_name: "test-1-1"
+        command: "echo 'Hello World'"
+        working_directory: "/tmp"
+        timeout_minutes: 5
+        max_retries: 3
+        status: "COMPLETED"
+        started_at: "2025-09-07T17:00:00Z"
+        completed_at: "2025-09-07T17:00:01Z"
+        exit_code: 0
+        output: "Hello World"
+        error_message: null
+        retry_count: 0
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+        timestamp:
+          type: string
+          format: date-time
+          description: When the error occurred
+        path:
+          type: string
+          description: API path where the error occurred

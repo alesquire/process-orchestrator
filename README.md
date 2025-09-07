@@ -1,306 +1,388 @@
 # Process Orchestrator
 
-A robust process orchestration system built on top of `db-scheduler` that enables sequential task execution with automatic progression, retry mechanisms, and comprehensive result persistence.
+A comprehensive process orchestration system built on top of `db-scheduler` that enables sequential task execution with automatic progression, retry mechanisms, and comprehensive result persistence.
 
-## Features
+![Process Orchestrator Dashboard](image.png)
 
-- **Sequential Task Execution**: Processes execute tasks one after another with automatic progression
-- **Process State Management**: Track process lifecycle (Not Started, In Progress, Completed, Failed)
-- **Task Persistence**: All task and process data stored in PostgreSQL via `db-scheduler`
-- **Retry Mechanisms**: Failed tasks can be automatically retried with configurable limits
-- **CLI Task Execution**: Execute command-line utilities with cross-platform support
-- **Result Persistence**: Complete audit trail of all process and task executions
-- **Parallel Process Support**: Multiple processes can run concurrently
-- **Web UI Dashboard**: Monitor and manage tasks through a web-based interface
-- **Scalable**: Designed to handle 5000+ processes with 10+ tasks each
+## Table of Contents
 
-## Project Structure
+- [Architecture Overview](#architecture-overview)
+- [Database Schema](#database-schema)
+- [Main Classes](#main-classes)
+- [Usage Examples](#usage-examples)
+- [Installation Guide](#installation-guide)
+- [API Documentation](#api-documentation)
+- [Features](#features)
+- [Project Structure](#project-structure)
 
-The Process Orchestrator is organized into multiple modules:
+## Architecture Overview
 
-- **`process-orchestrator-core`**: Core orchestration functionality
-- **`db-scheduler-ui-module`**: Web-based dashboard for monitoring and managing tasks
-- **`process-ui-module`**: Custom tabular dashboard for visualizing processes and tasks
+The Process Orchestrator follows a modular architecture with clear separation of concerns:
 
-## Web UI Dashboard
+### Core Components
 
-The system includes a web-based dashboard powered by [db-scheduler-ui](https://github.com/bekk/db-scheduler-ui) that provides:
+1. **Process Orchestrator Core** (`process-orchestrator-core`)
+   - Central orchestration engine
+   - Process and task lifecycle management
+   - Database persistence layer
+   - CLI task execution engine
 
-- **Task Monitoring**: View scheduled, running, and failed tasks
-- **Task Management**: Manually run, retry, or delete tasks
-- **Task History**: View execution history of all tasks
-- **Real-time Updates**: Live status updates
-- **Security**: Optional authentication and role-based access
+2. **Process UI Module** (`process-ui-module`)
+   - Web-based dashboard for process monitoring
+   - REST API for process and task data
+   - Real-time status updates
+   - Task details viewer
 
-### Starting the UI
+3. **DB Scheduler UI Module** (`db-scheduler-ui-module`)
+   - Integration with db-scheduler's built-in UI
+   - Task scheduling and execution monitoring
+   - Historical task data visualization
 
-```bash
-# Option 1: Using the provided scripts
-./start-ui.bat          # Windows Batch
-./start-ui.ps1          # PowerShell
-./start-ui.sh           # Git Bash
+### Data Flow
 
-# Option 2: Using Maven directly
-cd db-scheduler-ui-module
-mvn spring-boot:run
+```
+User Request → Process UI → Process Orchestrator → DB Scheduler → PostgreSQL
+     ↓              ↓              ↓                    ↓
+Web Dashboard ← REST API ← Process Logic ← Task Execution ← Database
 ```
 
-The UI will be available at: `http://localhost:8080/db-scheduler`
+### Key Design Principles
 
-### UI Configuration
-
-Configure the UI via `db-scheduler-ui-module/src/main/resources/application.properties`:
-
-```properties
-# Enable task history
-db-scheduler-ui.history=true
-db-scheduler-ui.log-limit=1000
-
-# Show task data in UI
-db-scheduler-ui.task-data=true
-
-# Read-only mode
-db-scheduler-ui.read-only=false
-
-# Optional: Enable security
-spring.security.user.name=admin
-spring.security.user.password=admin123
-spring.security.user.roles=ADMIN
-```
-
-## Architecture
-
-The system leverages `db-scheduler`'s out-of-the-box capabilities:
-
-- **Process Data**: Stored in `db-scheduler`'s `task_data` field as JSON
-- **Task Scheduling**: Uses `db-scheduler`'s task scheduling and execution engine
-- **Persistence**: Automatic persistence to PostgreSQL database
-- **Cluster Support**: Built-in clustering and failover capabilities
-
-## Quick Start
-
-### 1. Setup Process Types
-
-```java
-// Process types are now centrally managed in ProcessTypeInitializer
-ProcessTypeRegistry registry = new ProcessTypeRegistry();
-ProcessTypeInitializer.registerDefaultProcessTypes(registry);
-
-// Available process types:
-// - single-task-process: Process with one task
-// - two-task-process: Process with two tasks  
-// - three-task-process: Process with three tasks
-// - failing-process: Process that intentionally fails
-```
-
-### 2. Create Input Data
-
-```java
-ProcessInputData inputData = new ProcessInputData();
-inputData.setInputFile("/data/sample_input.json");
-inputData.setOutputDir("/data/output");
-inputData.setUserId("user123");
-inputData.addConfig("batch_size", "100");
-inputData.addConfig("quality_threshold", "95.0");
-inputData.addMetadata("source_system", "legacy_database");
-inputData.addMetadata("priority", "high");
-```
-
-### 3. Start Process
-
-```java
-ProcessOrchestrator orchestrator = new ProcessOrchestrator(dataSource, registry);
-orchestrator.start();
-
-String processId = orchestrator.startProcess("single-task-process", inputData);
-```
-
-### 4. Monitor Results
-
-```java
-// Get process status
-ProcessData process = orchestrator.getProcess(processId);
-
-// Get all tasks for the process
-List<TaskData> tasks = orchestrator.getProcessTasks(processId);
-
-// Get all processes
-List<ProcessData> allProcesses = orchestrator.getAllProcesses();
-
-// Get processes by status
-List<ProcessData> completedProcesses = orchestrator.getProcessesByStatus(ProcessStatus.COMPLETED);
-```
-
-## Example: Data Processing Pipeline
-
-The system includes a complete example of a data processing pipeline with four sequential tasks:
-
-1. **Load**: Load data from input file
-2. **Process**: Transform and process the data
-3. **Generate**: Create HTML report from processed data
-4. **Analyze**: Analyze results and create analysis report
-
-### Python Scripts
-
-The example includes Python scripts that demonstrate real CLI task execution:
-
-- `scripts/load_data.py`: Loads and structures input data
-- `scripts/process_data.py`: Applies transformations to the data
-- `scripts/generate_report.py`: Creates HTML reports
-- `scripts/analyze_results.py`: Performs analysis and quality checks
-
-### Running the Example
-
-```bash
-# Compile the project
-mvn compile
-
-# Run the main application with examples
-mvn exec:java -Dexec.mainClass="com.processorchestrator.Main"
-```
-
-## Process Structure
-
-### ProcessInputData
-Contains the initial context for a process:
-- `inputFile`: Source file path
-- `outputDir`: Output directory path
-- `userId`: User identifier
-- `config`: Configuration parameters (key-value pairs)
-- `metadata`: Additional metadata (key-value pairs)
-
-### ProcessData
-Runtime process information stored in database:
-- Process ID, type, and status
-- Current task index and total tasks
-- Timestamps (started, completed)
-- Error messages
-- List of TaskData objects
-- Process context (runtime data)
-
-### TaskData
-Individual task information:
-- Task ID, name, and command
-- Working directory and timeout
-- Retry configuration
-- Execution status and timestamps
-- Exit code and output
-- Error messages
+- **Sequential Execution**: Tasks within a process execute one after another
+- **State Persistence**: All process and task states are persisted to PostgreSQL
+- **Fault Tolerance**: Automatic retry mechanisms with configurable limits
+- **Scalability**: Support for concurrent process execution
+- **Observability**: Comprehensive logging and monitoring capabilities
 
 ## Database Schema
 
-The system creates additional tables for monitoring and result persistence:
+The system uses a simplified 3-table schema optimized for process orchestration:
 
-```sql
--- Process tracking table
-CREATE TABLE processes (
-    process_id VARCHAR(255) PRIMARY KEY,
-    process_type VARCHAR(255) NOT NULL,
-    status VARCHAR(50) NOT NULL,
-    current_task_index INTEGER NOT NULL DEFAULT 0,
-    total_tasks INTEGER NOT NULL,
-    started_at TIMESTAMP,
-    completed_at TIMESTAMP,
-    error_message TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+### 1. `scheduled_tasks` Table
+**Role**: Core db-scheduler table for task scheduling and execution
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `task_name` | VARCHAR(255) | Name of the task type |
+| `task_instance` | VARCHAR(255) | Unique instance identifier |
+| `task_data` | BYTEA | Serialized task data |
+| `execution_time` | TIMESTAMP WITH TIME ZONE | When the task should execute |
+| `picked` | BOOLEAN | Whether the task is currently being executed |
+| `picked_by` | VARCHAR(50) | Which instance picked the task |
+| `last_success` | TIMESTAMP WITH TIME ZONE | Last successful execution |
+| `last_failure` | TIMESTAMP WITH TIME ZONE | Last failed execution |
+| `consecutive_failures` | INTEGER | Number of consecutive failures |
+| `last_heartbeat` | TIMESTAMP WITH TIME ZONE | Last heartbeat from executor |
+
+### 2. `process_record` Table
+**Role**: User-managed process templates and their execution state
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | VARCHAR(255) | Unique process identifier |
+| `type` | VARCHAR(100) | Process type name |
+| `input_data` | TEXT | Input data for the process |
+| `schedule` | VARCHAR(100) | Cron schedule (optional) |
+| `current_status` | VARCHAR(50) | Current process status |
+| `current_task_index` | INTEGER | Index of currently executing task |
+| `total_tasks` | INTEGER | Total number of tasks |
+| `started_when` | TIMESTAMP | When the process started |
+| `completed_when` | TIMESTAMP | When the process completed |
+| `failed_when` | TIMESTAMP | When the process failed |
+| `stopped_when` | TIMESTAMP | When the process was stopped |
+| `last_error_message` | TEXT | Last error message |
+| `triggered_by` | VARCHAR(255) | What triggered this process |
+| `created_at` | TIMESTAMP | Creation timestamp |
+| `updated_at` | TIMESTAMP | Last update timestamp |
+
+### 3. `tasks` Table
+**Role**: Individual task execution records and results
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | VARCHAR(255) | Unique task identifier |
+| `process_record_id` | VARCHAR(255) | Reference to process record |
+| `task_index` | INTEGER | Position in process sequence |
+| `task_name` | VARCHAR(255) | Task name |
+| `status` | VARCHAR(50) | Task execution status |
+| `command` | TEXT | Command to execute |
+| `working_directory` | VARCHAR(500) | Working directory for command |
+| `timeout_minutes` | INTEGER | Timeout in minutes |
+| `retry_count` | INTEGER | Current retry count |
+| `max_retries` | INTEGER | Maximum retry attempts |
+| `started_at` | TIMESTAMP | When task execution started |
+| `completed_at` | TIMESTAMP | When task execution completed |
+| `error_message` | TEXT | Error message if failed |
+| `exit_code` | INTEGER | Command exit code |
+| `output` | TEXT | Command output |
+| `metadata` | JSONB | Additional task metadata |
+
+## Main Classes
+
+### Core Module (`process-orchestrator-core`)
+
+#### `ProcessOrchestrator`
+**Role**: Central orchestration engine
+- Manages process lifecycle (start, execute, complete, fail)
+- Coordinates sequential task execution
+- Handles task retries and error recovery
+- Maintains process state and context
+
+#### `ProcessRecordController`
+**Role**: CRUD operations for process records
+- Create, read, update, delete process records
+- Validate process types and input data
+- Provide REST API endpoints for process management
+
+#### `ProcessTypeRegistry`
+**Role**: Process type definitions and management
+- Stores available process types and their task definitions
+- Provides type validation and lookup
+- Centralized process type configuration
+
+#### `ProcessTypeInitializer`
+**Role**: Process type initialization
+- Registers default process types
+- Centralizes all process type definitions
+- Ensures consistent process type availability
+
+#### `CLITaskExecutor`
+**Role**: Command-line task execution
+- Executes CLI commands for tasks
+- Handles cross-platform command execution
+- Manages command timeouts and output capture
+
+#### `ProcessRecordDAO`
+**Role**: Database access layer
+- CRUD operations for process records
+- Database connection management
+- Query optimization and performance
+
+### UI Module (`process-ui-module`)
+
+#### `ProcessUiController`
+**Role**: REST API for UI dashboard
+- Provides process and task data for dashboard
+- Handles task details API endpoints
+- Serves HTML pages for UI
+
+#### `ProcessDashboardController`
+**Role**: Web page serving
+- Serves dashboard HTML pages
+- Handles page routing and navigation
+
+#### `ProcessUiBeanConfig`
+**Role**: Spring configuration
+- Configures Spring beans for UI module
+- Initializes process type registry
+- Sets up dependency injection
+
+### Model Classes
+
+#### `ProcessRecord`
+**Role**: Process record data model
+- Represents a process template and its state
+- Contains process metadata and execution status
+- Immutable user-managed fields
+
+#### `TaskData`
+**Role**: Task execution data model
+- Represents individual task information
+- Contains command, status, and execution results
+- Supports retry logic and error handling
+
+#### `ProcessType`
+**Role**: Process type definition
+- Defines a reusable process template
+- Contains task sequence and configuration
+- Provides task definitions and metadata
+
+## Usage Examples
+
+### Creating a Process
+
+```java
+// 1. Initialize the orchestrator
+ProcessTypeRegistry registry = new ProcessTypeRegistry();
+ProcessTypeInitializer.registerDefaultProcessTypes(registry);
+ProcessRecordDAO dao = new ProcessRecordDAO(dataSource);
+ProcessRecordController controller = new ProcessRecordController(dao, registry);
+
+// 2. Create a process record
+ProcessType processType = registry.getProcessType("single-task-process");
+ProcessRecordResponse response = controller.createProcessRecord(
+    "my-process-001",
+    processType,
+    "Sample input data",
+    null  // No schedule - run immediately
 );
 
--- Task tracking table
-CREATE TABLE tasks (
-    task_id VARCHAR(255) PRIMARY KEY,
-    process_id VARCHAR(255) NOT NULL,
-    task_index INTEGER NOT NULL,
-    name VARCHAR(255) NOT NULL,
-    command TEXT NOT NULL,
-    working_directory VARCHAR(500),
-    timeout_minutes INTEGER NOT NULL DEFAULT 60,
-    max_retries INTEGER NOT NULL DEFAULT 3,
-    retry_count INTEGER NOT NULL DEFAULT 0,
-    status VARCHAR(50) NOT NULL,
-    started_at TIMESTAMP,
-    completed_at TIMESTAMP,
-    error_message TEXT,
-    exit_code INTEGER,
-    output TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (process_id) REFERENCES processes(process_id)
-);
+if (response.isSuccess()) {
+    System.out.println("Process created: " + response.getProcessRecord().getId());
+}
 ```
 
-## Configuration
+### Starting Process Execution
 
-### Process Types
-Define reusable process templates with:
-- Task sequences
-- Command templates with variable substitution
-- Working directories
-- Timeout settings
-- Retry limits
+```java
+// 1. Initialize the orchestrator
+ProcessOrchestrator orchestrator = new ProcessOrchestrator(dataSource, registry);
+orchestrator.start();
 
-### Command Substitution
-Commands support variable substitution:
-- `${input_file}`: Input file path
-- `${output_dir}`: Output directory path
-- `${config.key}`: Configuration values
-- `${metadata.key}`: Metadata values
-- `${processContext.key}`: Runtime context values
+// 2. Start a process
+String processId = orchestrator.startProcess("single-task-process", inputData);
 
-## Error Handling
+// 3. Monitor process status
+ProcessData process = orchestrator.getProcess(processId);
+System.out.println("Process status: " + process.getStatus());
+```
 
-- **Task Failures**: Automatic retry with exponential backoff
-- **Process Failures**: Complete process state tracking
-- **Timeout Handling**: Configurable timeouts per task
-- **Error Persistence**: All errors logged to database
+### Working with Tasks
 
-## Monitoring and Observability
+```java
+// 1. Get all tasks for a process
+List<TaskData> tasks = orchestrator.getProcessTasks(processId);
 
-- **Process Status**: Real-time process state tracking
-- **Task Execution**: Detailed task execution logs
-- **Performance Metrics**: Execution times and resource usage
-- **Error Tracking**: Comprehensive error logging and analysis
+// 2. Check individual task status
+for (TaskData task : tasks) {
+    System.out.println("Task: " + task.getName() + 
+                      " Status: " + task.getStatus() +
+                      " Exit Code: " + task.getExitCode());
+}
 
-## Production Considerations
+// 3. Get task details
+Map<String, Object> taskDetails = orchestrator.getTaskDetails(taskId);
+```
 
-- **Database**: Use PostgreSQL for production deployments
-- **Clustering**: Leverage `db-scheduler`'s built-in clustering
-- **Monitoring**: Implement health checks and metrics collection
-- **Logging**: Configure appropriate log levels and retention
-- **Security**: Secure database connections and file system access
+### Available Process Types
 
-## Process UI Dashboard
+The system comes with four predefined process types:
 
-The system also includes a custom tabular dashboard (`process-ui-module`) that provides:
+1. **`single-task-process`**: One task execution
+   - Task: `test-1-1` - Simple echo command
 
-- **Tabular Process View**: Processes displayed as rows, tasks as columns
-- **Real-time Status Updates**: Auto-refresh every 5 seconds
-- **Process Statistics**: Overview cards showing process counts by status
-- **Status Badges**: Color-coded status indicators
-- **Responsive Design**: Bootstrap-based UI for desktop and mobile
+2. **`two-task-process`**: Two sequential tasks
+   - Task 1: `test-2-1` - First task
+   - Task 2: `test-2-2` - Second task
 
-### Starting the Process UI
+3. **`three-task-process`**: Three sequential tasks
+   - Task 1: `test-3-1` - First task
+   - Task 2: `test-3-2` - Second task
+   - Task 3: `test-3-3` - Third task
+
+4. **`failing-process`**: Process that intentionally fails
+   - Task: `test-failing` - Command that returns error code
+
+### Process Lifecycle
+
+```
+PENDING → IN_PROGRESS → COMPLETED
+    ↓         ↓
+  FAILED ← STOPPED
+```
+
+- **PENDING**: Process created but not started
+- **IN_PROGRESS**: Process is executing tasks
+- **COMPLETED**: All tasks completed successfully
+- **FAILED**: Process failed due to task failure
+- **STOPPED**: Process was manually stopped
+
+## Installation Guide
+
+### Prerequisites
+
+- **Java 17+**: Required for running the application
+- **Maven 3.6+**: For building and dependency management
+- **PostgreSQL 12+**: Primary database (H2 for testing)
+- **Git**: For cloning the repository
+
+### Step 1: Clone the Repository
 
 ```bash
-# Option 1: Using the provided scripts
-./start-process-ui.bat       # Windows Batch
-./start-process-ui.sh        # Git Bash
+git clone <repository-url>
+cd process-orchestrator
+```
 
-# Option 2: Using Maven directly
-cd process-ui-module
-mvn spring-boot:run
+### Step 2: Database Setup
+
+#### Option A: PostgreSQL (Recommended for Production)
+
+1. Install PostgreSQL 12+
+2. Create a database:
+   ```sql
+   CREATE DATABASE process_orchestrator;
+   CREATE USER process_user WITH PASSWORD 'your_password';
+   GRANT ALL PRIVILEGES ON DATABASE process_orchestrator TO process_user;
+   ```
+
+3. Update database configuration in `application.properties`:
+   ```properties
+   spring.datasource.url=jdbc:postgresql://localhost:5432/process_orchestrator
+   spring.datasource.username=process_user
+   spring.datasource.password=your_password
+   ```
+
+#### Option B: H2 (For Development/Testing)
+
+No additional setup required - H2 runs in-memory.
+
+### Step 3: Build the Project
+
+```bash
+# Build all modules
+mvn clean install
+
+# Skip tests for faster build
+mvn clean install -DskipTests
+```
+
+### Step 4: Run the Application
+
+#### Start the Core Module
+
+```bash
+# Option 1: Using Maven
+mvn exec:java -pl process-orchestrator-core
+
+# Option 2: Using JAR
+java -jar process-orchestrator-core/target/process-orchestrator-core-1.0.0-SNAPSHOT.jar
+```
+
+#### Start the Process UI
+
+```bash
+# Option 1: Using provided script
+./start-process-ui.sh
+
+# Option 2: Using Maven
+mvn spring-boot:run -pl process-ui-module
 ```
 
 The Process UI will be available at: `http://localhost:8082`
 
-### Process UI Features
+### Step 5: Verify Installation
 
-- **Process Table**: Shows all processes with their task statuses in a tabular format
-- **Statistics Dashboard**: Real-time counts of total, completed, in-progress, and failed processes
-- **Auto-refresh**: Configurable automatic data refresh
-- **Security**: HTTP Basic authentication with admin/user roles
+1. Open the Process UI dashboard
+2. Create a test process using the API
+3. Monitor process execution
+4. Check task details
 
-### Process UI Configuration
+### Configuration
+
+#### Core Module Configuration
+
+```properties
+# Database Configuration
+spring.datasource.url=jdbc:postgresql://localhost:5432/process_orchestrator
+spring.datasource.username=postgres
+spring.datasource.password=your_password
+
+# Logging Configuration
+logging.level.com.processorchestrator=INFO
+logging.level.com.github.kagkarlsson=WARN
+```
+
+#### UI Module Configuration
 
 ```properties
 # Server Configuration
@@ -311,18 +393,89 @@ spring.security.user.name=admin
 spring.security.user.password=admin123
 spring.security.user.roles=ADMIN
 
-# Database Configuration (inherited from core module)
-spring.datasource.url=jdbc:postgresql://localhost:5432/process_orchestrator
-spring.datasource.username=postgres
-spring.datasource.password=your-super-secret-and-long-postgres-password
+# UI Configuration
+process-ui.refresh-interval=5000
+process-ui.auto-refresh=true
 ```
 
-## Dependencies
+## API Documentation
 
-- Java 17+
-- Maven 3.6+
-- PostgreSQL 12+ (or H2 for testing)
-- Python 3.7+ (for example scripts)
+The Process Orchestrator provides a comprehensive REST API documented in OpenAPI 3.0 format.
+
+### Core API Endpoints
+
+- **Process Records**: `/process-records`
+  - `POST /process-records` - Create a new process record
+  - `GET /process-records` - Get all process records
+  - `GET /process-records/{id}` - Get process record by ID
+  - `PUT /process-records/{id}` - Update process record
+  - `DELETE /process-records/{id}` - Delete process record
+  - `POST /process-records/{id}/start` - Start a process
+  - `POST /process-records/{id}/stop` - Stop a process
+
+- **Process Types**: `/process-types`
+  - `GET /process-types` - Get available process types
+
+### UI API Endpoints
+
+- **Process Dashboard**: `/api/processes`
+  - `GET /api/processes` - Get processes for dashboard
+  - `GET /api/processes/{processId}` - Get process details
+
+- **Task Details**: `/api/task-details`
+  - `GET /api/task-details/{taskId}` - Get task details
+
+- **Debug Endpoints**: `/api/debug`
+  - `GET /api/debug/task-ids` - Get all task IDs
+
+### OpenAPI Specification
+
+The complete API specification is available in `openapi.yaml` and can be viewed using:
+- Swagger UI
+- Postman
+- Any OpenAPI-compatible tool
+
+## Features
+
+- **Sequential Task Execution**: Processes execute tasks one after another with automatic progression
+- **Process State Management**: Track process lifecycle (PENDING, IN_PROGRESS, COMPLETED, FAILED, STOPPED)
+- **Task Persistence**: All task and process data stored in PostgreSQL via `db-scheduler`
+- **Retry Mechanisms**: Failed tasks can be automatically retried with configurable limits
+- **CLI Task Execution**: Execute command-line utilities with cross-platform support
+- **Result Persistence**: Complete audit trail of all process and task executions
+- **Parallel Process Support**: Multiple processes can run concurrently
+- **Web UI Dashboard**: Monitor and manage tasks through a web-based interface
+- **REST API**: Comprehensive API for programmatic access
+- **Scalable**: Designed to handle 5000+ processes with 10+ tasks each
+
+## Project Structure
+
+```
+process-orchestrator/
+├── process-orchestrator-core/          # Core orchestration functionality
+│   ├── src/main/java/
+│   │   ├── com/processorchestrator/
+│   │   │   ├── config/                 # Process type definitions
+│   │   │   ├── controller/             # REST controllers
+│   │   │   ├── dao/                    # Data access objects
+│   │   │   ├── executor/               # Task execution
+│   │   │   ├── model/                  # Data models
+│   │   │   └── service/                # Business logic
+│   │   └── resources/
+│   │       └── schema.sql              # Database schema
+├── process-ui-module/                  # Custom UI dashboard
+│   ├── src/main/java/
+│   │   └── com/processorchestrator/ui/
+│   │       ├── controller/             # UI controllers
+│   │       └── config/                 # UI configuration
+│   └── src/main/resources/
+│       ├── templates/                  # Thymeleaf templates
+│       └── static/                     # Static resources
+├── db-scheduler-ui-module/             # DB Scheduler UI integration
+├── openapi.yaml                        # API documentation
+├── README.md                           # This file
+└── image.png                           # UI example screenshot
+```
 
 ## License
 
