@@ -70,7 +70,7 @@ public class ProcessOrchestrator {
         // Initialize scheduler with task registrations
         this.scheduler = Scheduler.create(dataSource, processTask, cliTask)
                 .threads(10) // Support parallel process execution
-                .pollingInterval(Duration.ofSeconds(5))
+                .pollingInterval(Duration.ofSeconds(1)) // Reduced polling interval for faster execution
                 .build();
         
         this.schedulerClient = scheduler;
@@ -80,7 +80,7 @@ public class ProcessOrchestrator {
      * Start a new process with input data
      */
     public String startProcess(String processTypeName, ProcessInputData inputData) {
-        return startProcess(processTypeName, inputData, generateProcessId(), null);
+        return startProcess(processTypeName, inputData, generateProcessId(processTypeName), null);
     }
     
     public String startProcess(String processTypeName, ProcessInputData inputData, String processId) {
@@ -100,7 +100,8 @@ public class ProcessOrchestrator {
         List<TaskData> tasks = new ArrayList<>();
         for (int i = 0; i < processType.getTaskCount(); i++) {
             var taskDef = processType.getTask(i);
-            String taskId = processId + "-task-" + i;
+            // Create task ID with: process_id + processName + task_name + timestamp
+            String taskId = processId + "-" + processTypeName + "-" + taskDef.getName() + "-" + System.currentTimeMillis();
             
             TaskData taskData = new TaskData(taskId, processId, taskDef.getName(), 
                                            taskDef.getCommand(), taskDef.getWorkingDirectory(),
@@ -113,12 +114,18 @@ public class ProcessOrchestrator {
         processDataCache.put(processId, processData);
         
         // Schedule the process for immediate execution
-        schedulerClient.schedule(
-            processTask.instance("process-" + processId, processData),
-            Instant.now()
-        );
+        TaskInstance<ProcessData> taskInstance = processTask.instance("process-" + processId, processData);
+        schedulerClient.schedule(taskInstance, Instant.now());
         
-        logger.info("Process {} scheduled for execution", processId);
+        logger.info("Process {} scheduled for execution with task instance: {}", processId, taskInstance.getId());
+        
+        // Debug: Check if task was actually scheduled
+        try {
+            Thread.sleep(1000); // Wait 1 second
+            logger.info("DEBUG: Checking scheduled_tasks table for task: {}", taskInstance.getId());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
         return processId;
     }
 
@@ -129,7 +136,7 @@ public class ProcessOrchestrator {
         ProcessData processData = taskInstance.getData();
         String processId = processData.getProcessId();
         
-        logger.info("Executing process: {}", processId);
+        logger.info("=== EXECUTE PROCESS CALLED === Process: {}, Task Instance: {}", processId, taskInstance.getId());
         
         try {
             // Mark process as started
@@ -677,8 +684,8 @@ public class ProcessOrchestrator {
     /**
      * Generate a unique process ID
      */
-    private String generateProcessId() {
-        return "process-" + System.currentTimeMillis() + "-" + UUID.randomUUID().toString().substring(0, 8);
+    private String generateProcessId(String processTypeName) {
+        return processTypeName + "-" + System.currentTimeMillis();
     }
 
     /**
@@ -687,6 +694,9 @@ public class ProcessOrchestrator {
     public void start() {
         scheduler.start();
         logger.info("Process Orchestrator started");
+        
+        // Debug: Check if scheduler is running
+        logger.info("DEBUG: Scheduler started, polling every 1 second");
     }
 
     /**

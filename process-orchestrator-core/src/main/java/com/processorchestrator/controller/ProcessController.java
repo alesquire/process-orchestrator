@@ -65,8 +65,11 @@ public class ProcessController {
             // Parse input data
             ProcessInputData inputData = parseInputData(record.getInputData());
             
+            // Get process type first
+            ProcessType processType = processTypeRegistry.getProcessTypeOrThrow(record.getType());
+            
             // Generate unique process ID for this execution
-            String processId = generateProcessId(processRecordId);
+            String processId = generateProcessId(processType.getName(), processRecordId);
             
             // Cancel any existing scheduled tasks for this process record
             processOrchestrator.cancelExistingTasks(processRecordId);
@@ -81,7 +84,6 @@ public class ProcessController {
             processRecordDAO.updateTriggeredBy(processRecordId, "MANUAL");
             
             // Update task progress with total number of tasks
-            ProcessType processType = processTypeRegistry.getProcessTypeOrThrow(record.getType());
             processRecordDAO.updateTaskProgress(processRecordId, 0, processType.getTaskCount());
             
             // Start the process using the orchestrator
@@ -267,8 +269,8 @@ public class ProcessController {
     public ProcessType getProcessType(String name) {
         return processTypeRegistry.getProcessType(name);
     }
-    private String generateProcessId(String processRecordId) {
-        return processRecordId + "-" + System.currentTimeMillis() + "-" + UUID.randomUUID().toString().substring(0, 8);
+    private String generateProcessId(String processType, String processRecordId) {
+        return processType + "-" + processRecordId;
     }
 
     /**
