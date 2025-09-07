@@ -92,7 +92,7 @@ public class ProcessRecordIntegrationTest {
             processOrchestrator.start(); // Start the orchestrator
 
             processRecordDAO = new ProcessRecordDAO(dataSource);
-            processRecordController = new ProcessRecordController(processRecordDAO);
+            processRecordController = new ProcessRecordController(processRecordDAO, processTypeRegistry);
             processController = new ProcessController(processRecordDAO, processOrchestrator, processTypeRegistry);
     }
 

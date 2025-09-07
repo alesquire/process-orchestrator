@@ -1,5 +1,7 @@
 package com.processorchestrator.ui.controller;
 
+import com.processorchestrator.config.ProcessType;
+import com.processorchestrator.config.ProcessTypeRegistry;
 import com.processorchestrator.dao.ProcessRecordDAO;
 import com.processorchestrator.model.ProcessDetails;
 import com.processorchestrator.model.TaskData;
@@ -25,6 +27,32 @@ public class ProcessUiController {
     @Autowired
     private ProcessOrchestrator processOrchestrator;
 
+    @Autowired
+    private ProcessTypeRegistry processTypeRegistry;
+
+    /**
+     * Get all available process types
+     */
+    @GetMapping("/process-types")
+    public ProcessTypesResponse getProcessTypes() {
+        List<ProcessType> processTypes = processTypeRegistry.getAllProcessTypes().values().stream()
+                .collect(Collectors.toList());
+        
+        // Get all unique task names from all process types
+        Set<String> allTaskNames = new HashSet<>();
+        for (ProcessType processType : processTypes) {
+            for (int i = 0; i < processType.getTaskCount(); i++) {
+                allTaskNames.add(processType.getTask(i).getName());
+            }
+        }
+        
+        List<String> taskNames = allTaskNames.stream()
+                .sorted()
+                .collect(Collectors.toList());
+        
+        return new ProcessTypesResponse(processTypes, taskNames);
+    }
+
     /**
      * Get all processes with their tasks in a tabular format
      */
@@ -32,19 +60,23 @@ public class ProcessUiController {
     public ProcessTableResponse getProcessesTable() {
         List<ProcessDetails> processes = processRecordDAO.findAll();
         
-        // Get all unique task names from actual processes in the database
+        // Get all unique task names from all process types (not just executed tasks)
         Set<String> allTaskNames = new HashSet<>();
+        Map<String, ProcessType> processTypeMap = processTypeRegistry.getAllProcessTypes();
+        
+        // Collect task names from all defined process types
+        for (ProcessType processType : processTypeMap.values()) {
+            for (int i = 0; i < processType.getTaskCount(); i++) {
+                allTaskNames.add(processType.getTask(i).getName());
+            }
+        }
+        
         Map<String, List<TaskData>> processTasksMap = new HashMap<>();
         
-        // Collect task names from actual process executions in the database
+        // Get actual task execution data for each process
         for (ProcessDetails process : processes) {
             List<TaskData> tasks = processOrchestrator.getProcessTasks(process.getId());
             processTasksMap.put(process.getId(), tasks);
-            
-            // Add task names from actual executed tasks
-            for (TaskData task : tasks) {
-                allTaskNames.add(task.getName());
-            }
         }
         
         // Convert to sorted list for consistent column ordering
@@ -149,5 +181,22 @@ public class ProcessUiController {
         public long getCompletedProcesses() { return completedProcesses; }
         public long getInProgressProcesses() { return inProgressProcesses; }
         public long getFailedProcesses() { return failedProcesses; }
+    }
+
+    /**
+     * Response class for process types
+     */
+    public static class ProcessTypesResponse {
+        private List<ProcessType> processTypes;
+        private List<String> taskNames;
+
+        public ProcessTypesResponse(List<ProcessType> processTypes, List<String> taskNames) {
+            this.processTypes = processTypes;
+            this.taskNames = taskNames;
+        }
+
+        // Getters
+        public List<ProcessType> getProcessTypes() { return processTypes; }
+        public List<String> getTaskNames() { return taskNames; }
     }
 }

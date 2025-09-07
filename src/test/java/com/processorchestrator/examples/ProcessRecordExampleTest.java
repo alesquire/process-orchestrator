@@ -1,7 +1,7 @@
 package com.processorchestrator.examples;
 
 import com.processorchestrator.config.DatabaseConfig;
-import com.processorchestrator.config.ProcessType;
+import com.processorchestrator.config.ProcessTypeInitializer;
 import com.processorchestrator.config.ProcessTypeRegistry;
 import com.processorchestrator.controller.ProcessController;
 import com.processorchestrator.controller.ProcessRecordController;
@@ -92,41 +92,8 @@ public class ProcessRecordExampleTest {
         processOrchestrator = new ProcessOrchestrator(dataSource, processTypeRegistry);
         processController = new ProcessController(processRecordDAO, processOrchestrator, processTypeRegistry);
         
-        // Register process types
-        registerProcessTypes();
-    }
-
-    /**
-     * Register the three different process types with 1, 2, and 3 tasks respectively
-     */
-    private void registerProcessTypes() {
-        logger.info("Registering process types...");
-
-        // Process Type 1: Single Task Process
-        ProcessType singleTaskProcess = new ProcessType("single-task-process", "Process with one task")
-                .addTask("validate", "python scripts/validate.py ${input_file}", System.getProperty("java.io.tmpdir"), 30, 2);
-        
-        processTypeRegistry.register(singleTaskProcess);
-        logger.info("Registered single-task-process with {} tasks", singleTaskProcess.getTaskCount());
-
-        // Process Type 2: Two Task Process  
-        ProcessType twoTaskProcess = new ProcessType("two-task-process", "Process with two tasks")
-                .addTask("extract", "java -cp " + System.getProperty("user.dir") + "/target/classes com.processorchestrator.util.MessagePrinter \"Extracting data from ${input_file} to ${output_dir}\"", System.getProperty("java.io.tmpdir"), 45, 2)
-                .addTask("transform", "java -cp " + System.getProperty("user.dir") + "/target/classes com.processorchestrator.util.MessagePrinter \"Transforming data from ${output_dir}/extracted.json to ${output_dir}/transformed.json\"", System.getProperty("java.io.tmpdir"), 60, 3);
-        
-        processTypeRegistry.register(twoTaskProcess);
-        logger.info("Registered two-task-process with {} tasks", twoTaskProcess.getTaskCount());
-
-        // Process Type 3: Three Task Process
-        ProcessType threeTaskProcess = new ProcessType("three-task-process", "Process with three tasks")
-                .addTask("load", "java -cp " + System.getProperty("user.dir") + "/target/classes com.processorchestrator.util.MessagePrinter \"Loading data from ${input_file} to ${output_dir}/loaded.json\"", System.getProperty("java.io.tmpdir"), 30, 2)
-                .addTask("process", "java -cp " + System.getProperty("user.dir") + "/target/classes com.processorchestrator.util.MessagePrinter \"Processing data from ${output_dir}/loaded.json to ${output_dir}/processed.json\"", System.getProperty("java.io.tmpdir"), 60, 3)
-                .addTask("analyze", "java -cp " + System.getProperty("user.dir") + "/target/classes com.processorchestrator.util.MessagePrinter \"Analyzing data from ${output_dir}/processed.json to ${output_dir}/analysis.json\"", System.getProperty("java.io.tmpdir"), 45, 2);
-        
-        processTypeRegistry.register(threeTaskProcess);
-        logger.info("Registered three-task-process with {} tasks", threeTaskProcess.getTaskCount());
-
-        logger.info("Total registered process types: {}", processTypeRegistry.getAllProcessTypes().size());
+        // Register process types using the dedicated initializer
+        ProcessTypeInitializer.registerDefaultProcessTypes(processTypeRegistry);
     }
 
     @Test

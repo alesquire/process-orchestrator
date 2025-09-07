@@ -1,7 +1,7 @@
 package com.processorchestrator.test;
 
 import com.processorchestrator.config.DatabaseConfig;
-import com.processorchestrator.config.ProcessType;
+import com.processorchestrator.config.ProcessTypeInitializer;
 import com.processorchestrator.config.ProcessTypeRegistry;
 import com.processorchestrator.controller.ProcessController;
 import com.processorchestrator.controller.ProcessRecordController;
@@ -111,18 +111,8 @@ public class ProcessRecordIntegrationTest {
     private ProcessTypeRegistry createProcessTypeRegistry() {
         ProcessTypeRegistry registry = new ProcessTypeRegistry();
         
-        // Register a simple test process type (Windows compatible)
-        ProcessType testProcessType = new ProcessType("test-process", "Test process for integration testing")
-                .addTask("task1", "java -cp " + System.getProperty("user.dir") + "/target/classes com.processorchestrator.util.MessagePrinter \"Task 1 executed\"", System.getProperty("java.io.tmpdir"), 30, 2)
-                .addTask("task2", "java -cp " + System.getProperty("user.dir") + "/target/classes com.processorchestrator.util.MessagePrinter \"Task 2 executed\"", System.getProperty("java.io.tmpdir"), 30, 2);
-        
-        registry.register(testProcessType);
-        
-        // Register a ping process type (Windows compatible)
-        ProcessType pingProcessType = new ProcessType("ping-process", "Process that performs ping operations")
-                .addTask("ping-task", "ping -n 5 8.8.8.8", System.getProperty("java.io.tmpdir"), 30, 2);
-        
-        registry.register(pingProcessType);
+        // Register process types using the dedicated initializer
+        ProcessTypeInitializer.registerDefaultProcessTypes(registry);
         
         return registry;
     }
@@ -133,7 +123,7 @@ public class ProcessRecordIntegrationTest {
         
         // Test Create
         String recordId = "test-record-001";
-        String processType = "test-process";
+        String processType = "single-task-process";
         String inputData = "input_file:/test/input.json;output_dir:/test/output;user_id:test-user";
         String schedule = "0 2 * * *"; // Daily at 2 AM
         
@@ -189,7 +179,7 @@ public class ProcessRecordIntegrationTest {
         for (int i = 0; i < recordIds.length; i++) {
             ProcessRecordController.ProcessRecordResponse createResponse = 
                 processRecordController.createProcessRecord(
-                    recordIds[i], "test-process", 
+                    recordIds[i], "single-task-process", 
                     "input_file:/test/input.json;output_dir:/test/output", 
                     null);
             
@@ -242,7 +232,7 @@ public class ProcessRecordIntegrationTest {
         String inputData = "input_file:/test/input.json;output_dir:/test/output;user_id:test-user";
         
         ProcessRecordController.ProcessRecordResponse createResponse = 
-            processRecordController.createProcessRecord(recordId, "test-process", inputData, null);
+            processRecordController.createProcessRecord(recordId, "single-task-process", inputData, null);
         
         assertTrue(createResponse.isSuccess(), "Process record creation should succeed");
         
@@ -293,7 +283,7 @@ public class ProcessRecordIntegrationTest {
         String inputData = "input_file:/test/input.json;output_dir:/test/output;user_id:test-user";
         
         ProcessRecordController.ProcessRecordResponse createResponse = 
-            processRecordController.createProcessRecord(recordId, "test-process", inputData, null);
+            processRecordController.createProcessRecord(recordId, "single-task-process", inputData, null);
         
         assertTrue(createResponse.isSuccess(), "Process record creation should succeed");
         
@@ -333,7 +323,7 @@ public class ProcessRecordIntegrationTest {
         String inputData = "input_file:/test/input.json;output_dir:/test/output;user_id:test-user";
         
         ProcessRecordController.ProcessRecordResponse createResponse = 
-            processRecordController.createProcessRecord(recordId, "test-process", inputData, null);
+            processRecordController.createProcessRecord(recordId, "single-task-process", inputData, null);
         
         assertTrue(createResponse.isSuccess(), "Process record creation should succeed");
         
@@ -376,19 +366,19 @@ public class ProcessRecordIntegrationTest {
         String recordId = "duplicate-test-record";
         
         ProcessRecordController.ProcessRecordResponse createResponse1 = 
-            processRecordController.createProcessRecord(recordId, "test-process", "input_data:test", null);
+            processRecordController.createProcessRecord(recordId, "single-task-process", "input_data:test", null);
         
         assertTrue(createResponse1.isSuccess(), "First creation should succeed");
         
         ProcessRecordController.ProcessRecordResponse createResponse2 = 
-            processRecordController.createProcessRecord(recordId, "test-process", "input_data:test", null);
+            processRecordController.createProcessRecord(recordId, "single-task-process", "input_data:test", null);
         
         assertFalse(createResponse2.isSuccess(), "Duplicate creation should fail");
         assertTrue(createResponse2.getMessage().contains("already exists"), "Error message should indicate already exists");
         
         // Test deleting running process record
         ProcessRecordController.ProcessRecordResponse createResponse3 = 
-            processRecordController.createProcessRecord("running-record", "test-process", "input_data:test", null);
+            processRecordController.createProcessRecord("running-record", "single-task-process", "input_data:test", null);
         
         assertTrue(createResponse3.isSuccess(), "Process record creation should succeed");
         
@@ -417,7 +407,7 @@ public class ProcessRecordIntegrationTest {
         for (int i = 0; i < recordIds.length; i++) {
             ProcessRecordController.ProcessRecordResponse createResponse = 
                 processRecordController.createProcessRecord(
-                    recordIds[i], "test-process", 
+                    recordIds[i], "single-task-process", 
                     "input_file:/test/input.json;output_dir:/test/output", 
                     schedules[i]);
             
@@ -446,7 +436,7 @@ public class ProcessRecordIntegrationTest {
         
         // Create three different process records
         String[] recordIds = {"multi-test-1", "multi-test-2", "multi-test-3"};
-        String[] processTypes = {"test-process", "test-process", "ping-process"};
+        String[] processTypes = {"single-task-process", "single-task-process", "two-task-process"};
         String[] inputData = {
             "input_file:/test/input1.json;output_dir:/test/output1",
             "input_file:/test/input2.json;output_dir:/test/output2", 
@@ -509,7 +499,7 @@ public class ProcessRecordIntegrationTest {
     void testConcurrentProcessExecution() {
         logger.info("Testing concurrent execution of 10 processes");
         
-        // Create 10 process records with the same process definition (test-process with 2 tasks)
+        // Create 10 process records with the same process definition (single-task-process with 2 tasks)
         String[] processIds = new String[10];
         ProcessRecordController.ProcessRecordResponse[] responses = new ProcessRecordController.ProcessRecordResponse[10];
         
@@ -517,13 +507,13 @@ public class ProcessRecordIntegrationTest {
             processIds[i] = "concurrent-test-" + (i + 1);
             String inputData = "input_file:/test/input" + (i + 1) + ".json;output_dir:/test/output" + (i + 1);
             
-            // All processes use the same definition: test-process (2 tasks)
+            // All processes use the same definition: single-task-process (2 tasks)
             responses[i] = processRecordController.createProcessRecord(
-                processIds[i], "test-process", inputData, null);
+                processIds[i], "single-task-process", inputData, null);
             
             assertTrue(responses[i].isSuccess(), "Process record " + (i + 1) + " creation should succeed");
             assertEquals(processIds[i], responses[i].getData().getId());
-            assertEquals("test-process", responses[i].getData().getType());
+            assertEquals("single-task-process", responses[i].getData().getType());
             assertEquals("PENDING", responses[i].getData().getCurrentStatus());
         }
         
@@ -537,7 +527,7 @@ public class ProcessRecordIntegrationTest {
             logger.info("Started process {} with orchestrator ID: {}", processIds[i], startResponses[i].getOrchestratorProcessId());
         }
         
-        // Wait for processes to complete (test-process has 2 tasks, so should complete relatively quickly)
+        // Wait for processes to complete (single-task-process has 2 tasks, so should complete relatively quickly)
         try {
             Thread.sleep(20000); // Wait 20 seconds for all processes to complete
         } catch (InterruptedException e) {
@@ -578,7 +568,7 @@ public class ProcessRecordIntegrationTest {
         logger.info("  In Progress: {}", inProgressCount);
         logger.info("  Failed: {}", failedCount);
         
-        // Most processes should have completed (test-process with 2 simple tasks)
+        // Most processes should have completed (single-task-process with 2 simple tasks)
         assertTrue(completedCount >= 8, "At least 8 out of 10 processes should have completed");
         
         logger.info("Concurrent process execution test completed successfully");

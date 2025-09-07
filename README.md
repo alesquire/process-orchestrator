@@ -82,16 +82,15 @@ The system leverages `db-scheduler`'s out-of-the-box capabilities:
 ### 1. Setup Process Types
 
 ```java
-// Define a data processing pipeline
-ProcessType dataProcessingPipeline = new ProcessType("data-processing-pipeline", "Complete data processing pipeline")
-    .addTask("load", "python scripts/load_data.py ${input_file} ${output_dir}/loaded_data.json", "/data", 30, 2)
-    .addTask("process", "python scripts/process_data.py ${output_dir}/loaded_data.json ${output_dir}/processed_data.json", "/data", 60, 3)
-    .addTask("generate", "python scripts/generate_report.py ${output_dir}/processed_data.json ${output_dir}/report.html", "/data", 45, 2)
-    .addTask("analyze", "python scripts/analyze_results.py ${output_dir}/report.html ${output_dir}/analysis.json", "/data", 30, 2);
-
-// Register the process type
+// Process types are now centrally managed in ProcessTypeInitializer
 ProcessTypeRegistry registry = new ProcessTypeRegistry();
-registry.register(dataProcessingPipeline);
+ProcessTypeInitializer.registerDefaultProcessTypes(registry);
+
+// Available process types:
+// - single-task-process: Process with one task
+// - two-task-process: Process with two tasks  
+// - three-task-process: Process with three tasks
+// - failing-process: Process that intentionally fails
 ```
 
 ### 2. Create Input Data
@@ -113,7 +112,7 @@ inputData.addMetadata("priority", "high");
 ProcessOrchestrator orchestrator = new ProcessOrchestrator(dataSource, registry);
 orchestrator.start();
 
-String processId = orchestrator.startProcess("data-processing-pipeline", inputData);
+String processId = orchestrator.startProcess("single-task-process", inputData);
 ```
 
 ### 4. Monitor Results

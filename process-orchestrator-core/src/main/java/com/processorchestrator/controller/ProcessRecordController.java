@@ -1,5 +1,7 @@
 package com.processorchestrator.controller;
 
+import com.processorchestrator.config.ProcessType;
+import com.processorchestrator.config.ProcessTypeRegistry;
 import com.processorchestrator.dao.ProcessRecordDAO;
 import com.processorchestrator.model.ProcessDetails;
 import com.processorchestrator.model.ProcessRecord;
@@ -11,21 +13,23 @@ import java.util.Optional;
 
 /**
  * Controller for ProcessRecord CRUD operations
- * Provides a clean API for managing process records
+ * Provides a clean API for managing process records with process type validation
  */
 public class ProcessRecordController {
     private static final Logger logger = LoggerFactory.getLogger(ProcessRecordController.class);
     
     private final ProcessRecordDAO processRecordDAO;
+    private final ProcessTypeRegistry processTypeRegistry;
 
-    public ProcessRecordController(ProcessRecordDAO processRecordDAO) {
+    public ProcessRecordController(ProcessRecordDAO processRecordDAO, ProcessTypeRegistry processTypeRegistry) {
         this.processRecordDAO = processRecordDAO;
+        this.processTypeRegistry = processTypeRegistry;
     }
 
     // ==================== CRUD OPERATIONS ====================
 
     /**
-     * Create a new process record
+     * Create a new process record with process type validation
      */
     public ProcessRecordResponse createProcessRecord(String id, String type, String inputData, String schedule) {
         try {
@@ -44,6 +48,14 @@ public class ProcessRecordController {
                 return ProcessRecordResponse.error("Input data cannot be null or empty");
             }
             
+            // Validate process type exists in registry
+            ProcessType processType = processTypeRegistry.getProcessType(type);
+            if (processType == null) {
+                List<String> availableTypes = processTypeRegistry.getAllProcessTypes().keySet().stream()
+                        .collect(java.util.stream.Collectors.toList());
+                return ProcessRecordResponse.error("Invalid process type: '" + type + "'. Available types: " + availableTypes);
+            }
+            
             // Check if record already exists
             if (processRecordDAO.exists(id)) {
                 return ProcessRecordResponse.error("Process record with ID " + id + " already exists");
@@ -56,7 +68,8 @@ public class ProcessRecordController {
             // Return ProcessDetails with default engine values
             ProcessDetails details = new ProcessDetails(record);
             
-            logger.info("Successfully created process record: {}", id);
+            logger.info("Successfully created process record: {} with type: {} ({} tasks)", 
+                id, type, processType.getTaskCount());
             return ProcessRecordResponse.success(details, "Process record created successfully");
             
         } catch (Exception e) {
@@ -389,5 +402,37 @@ public class ProcessRecordController {
         public long getStopped() { return stopped; }
         public long getScheduled() { return scheduled; }
         public long getManual() { return total - scheduled; }
+    }
+
+    // ==================== PROCESS TYPE MANAGEMENT ====================
+
+    /**
+     * Get all available process types
+     */
+    public List<ProcessType> getAvailableProcessTypes() {
+        return processTypeRegistry.getAllProcessTypes().values().stream()
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    /**
+     * Get a specific process type by name
+     */
+    public ProcessType getProcessType(String name) {
+        return processTypeRegistry.getProcessType(name);
+    }
+
+    /**
+     * Check if a process type exists
+     */
+    public boolean isValidProcessType(String type) {
+        return processTypeRegistry.getProcessType(type) != null;
+    }
+
+    /**
+     * Get process type names as a list
+     */
+    public List<String> getProcessTypeNames() {
+        return processTypeRegistry.getAllProcessTypes().keySet().stream()
+                .collect(java.util.stream.Collectors.toList());
     }
 }

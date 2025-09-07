@@ -12,7 +12,14 @@ public class MessagePrinter {
         }
         
         String message = args[0];
-        System.out.println(message);
+        for(int i=0;i<30;i++) {
+            System.out.println(message);
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
         
         // Exit with success code
         System.exit(0);

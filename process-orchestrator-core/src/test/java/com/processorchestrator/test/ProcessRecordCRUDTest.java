@@ -1,6 +1,8 @@
 package com.processorchestrator.test;
 
 import com.processorchestrator.config.DatabaseConfig;
+import com.processorchestrator.config.ProcessTypeRegistry;
+import com.processorchestrator.config.ProcessTypeInitializer;
 import com.processorchestrator.controller.ProcessRecordController;
 import com.processorchestrator.dao.ProcessRecordDAO;
 import com.processorchestrator.database.DBInitializer;
@@ -28,6 +30,7 @@ public class ProcessRecordCRUDTest {
     private DataSource dataSource;
     private ProcessRecordDAO processRecordDAO;
     private ProcessRecordController processRecordController;
+    private ProcessTypeRegistry processTypeRegistry;
     private DBInitializer dbInitializer;
 
     @BeforeEach
@@ -74,7 +77,12 @@ public class ProcessRecordCRUDTest {
         
         // Create services
         processRecordDAO = new ProcessRecordDAO(dataSource);
-        processRecordController = new ProcessRecordController(processRecordDAO);
+        
+        // Initialize process type registry
+        processTypeRegistry = new ProcessTypeRegistry();
+        ProcessTypeInitializer.registerDefaultProcessTypes(processTypeRegistry);
+        
+        processRecordController = new ProcessRecordController(processRecordDAO, processTypeRegistry);
     }
 
     @AfterEach
@@ -181,7 +189,7 @@ public class ProcessRecordCRUDTest {
         
         // Create a process record
         String id = "test-crud-001";
-        String type = "test-process";
+        String type = "single-task-process";
         String inputData = "test input data";
         String schedule = "0 2 * * *";
         
@@ -204,7 +212,7 @@ public class ProcessRecordCRUDTest {
         
         // First create a process record
         String id = "test-crud-002";
-        String type = "test-process";
+        String type = "single-task-process";
         String inputData = "test input data for read";
         String schedule = null; // Manual execution
         
@@ -281,7 +289,7 @@ public class ProcessRecordCRUDTest {
         
         // First create a process record
         String id = "test-crud-004";
-        String type = "test-process";
+        String type = "single-task-process";
         String inputData = "test input data for delete";
         String schedule = "0 12 * * *";
         
@@ -361,7 +369,7 @@ public class ProcessRecordCRUDTest {
         
         // Test creating duplicate ID
         String id = "test-crud-error-001";
-        String type = "test-process";
+        String type = "single-task-process";
         String inputData = "test input data";
         String schedule = null;
         

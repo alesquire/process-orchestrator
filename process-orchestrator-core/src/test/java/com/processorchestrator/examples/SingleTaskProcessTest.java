@@ -84,15 +84,15 @@ public class SingleTaskProcessTest {
 
         // Create services
         processRecordDAO = new ProcessRecordDAO(dataSource);
-        processRecordController = new ProcessRecordController(processRecordDAO);
         
         // Initialize process type registry and orchestrator
         processTypeRegistry = new ProcessTypeRegistry();
         processOrchestrator = new ProcessOrchestrator(dataSource, processTypeRegistry);
         processController = new ProcessController(processRecordDAO, processOrchestrator, processTypeRegistry);
+        processRecordController = new ProcessRecordController(processRecordDAO, processTypeRegistry);
         
-        // Register the test process types
-        ProcessTypeInitializer.registerTestProcessTypes(processTypeRegistry);
+        // Register the process types
+        ProcessTypeInitializer.registerDefaultProcessTypes(processTypeRegistry);
         
         // Start the ProcessOrchestrator scheduler
         processOrchestrator.start();
@@ -126,11 +126,11 @@ public class SingleTaskProcessTest {
         
         logger.info("Step 1: Creating ProcessRecord with random input text");
         ProcessRecordController.ProcessRecordResponse createResponse = processRecordController.createProcessRecord(
-            processId, "single-print-task", inputData, null);
+            processId, "single-task-process", inputData, null);
         
         assertTrue(createResponse.isSuccess(), "Process record creation should succeed");
         assertEquals(processId, createResponse.getData().getId());
-        assertEquals("single-print-task", createResponse.getData().getType());
+        assertEquals("single-task-process", createResponse.getData().getType());
         assertEquals(inputData, createResponse.getData().getInputData());
         assertEquals("PENDING", createResponse.getData().getCurrentStatus());
         logger.info("✓ Created ProcessRecord: {} with input: '{}'", processId, randomText);
@@ -266,11 +266,11 @@ public class SingleTaskProcessTest {
         
         logger.info("Step 1: Creating ProcessRecord with random input text");
         ProcessRecordController.ProcessRecordResponse createResponse = processRecordController.createProcessRecord(
-            processId, "dual-print-task", inputData, null);
+            processId, "two-task-process", inputData, null);
         
         assertTrue(createResponse.isSuccess(), "Process record creation should succeed");
         assertEquals(processId, createResponse.getData().getId());
-        assertEquals("dual-print-task", createResponse.getData().getType());
+        assertEquals("two-task-process", createResponse.getData().getType());
         assertEquals(inputData, createResponse.getData().getInputData());
         assertEquals("PENDING", createResponse.getData().getCurrentStatus());
         logger.info("✓ Created ProcessRecord: {} with input: '{}'", processId, randomText);
@@ -409,7 +409,7 @@ public class SingleTaskProcessTest {
 
         // Create process record
         ProcessRecordController.ProcessRecordResponse createResponse = processRecordController.createProcessRecord(
-            processId, "single-print-task", inputData, null);
+            processId, "single-task-process", inputData, null);
         assertTrue(createResponse.isSuccess(), "Process record creation should succeed");
 
         // Test state transitions

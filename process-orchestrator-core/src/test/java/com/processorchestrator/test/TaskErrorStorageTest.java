@@ -85,7 +85,7 @@ public class TaskErrorStorageTest {
         processTypeRegistry = createProcessTypeRegistry();
         processOrchestrator = new ProcessOrchestrator(dataSource, processTypeRegistry);
         processController = new ProcessController(processRecordDAO, processOrchestrator, processTypeRegistry);
-        processRecordController = new ProcessRecordController(processRecordDAO);
+        processRecordController = new ProcessRecordController(processRecordDAO, processTypeRegistry);
         
         processOrchestrator.start();
     }

@@ -166,11 +166,89 @@ public class ProcessOrchestrator {
         saveTaskData(currentTask);
         logger.debug("Task {} started and persisted", currentTask.getTaskId());
         
-        // Schedule CLI task execution
-        schedulerClient.schedule(
-            cliTask.instance("task-" + currentTask.getTaskId(), currentTask),
-            Instant.now()
-        );
+        // Execute CLI task synchronously instead of scheduling it
+        executeCLITaskSynchronously(currentTask, context);
+    }
+
+    /**
+     * Execute a CLI task synchronously (called from executeCurrentTask)
+     */
+    private void executeCLITaskSynchronously(TaskData taskData, ExecutionContext context) {
+        String taskId = taskData.getTaskId();
+        
+        logger.info("Executing CLI task synchronously: {}", taskId);
+        
+        try {
+            // Build command with context
+            String command = buildCommandWithContext(taskData, taskData);
+            
+            // Execute the CLI command
+            CLITaskExecutor.ExecutionResult result = taskExecutor.execute(taskData, command);
+            
+            if (result.isSuccess()) {
+                logger.info("CLI task {} completed successfully", taskId);
+                logger.info("Task output: {}", result.getOutput());
+                taskData.markAsCompleted(result.getExitCode(), result.getOutput());
+                
+                // Persist task results
+                saveTaskData(taskData);
+                logger.debug("Task {} completed successfully and persisted", taskData.getTaskId());
+                
+                // Clean up scheduled task using db-scheduler API
+                cleanupScheduledTaskForCompletedTask(taskData.getTaskId());
+                
+                // Update process context with results
+                updateProcessContext(taskData, result);
+                
+                // Continue with next task in the process
+                continueProcess(taskData, context);
+                
+            } else {
+                logger.warn("CLI task {} failed: {}", taskId, result.getErrorMessage());
+                taskData.markAsFailed(result.getErrorMessage(), result.getExitCode());
+                
+                // Persist task failure
+                saveTaskData(taskData);
+                logger.debug("Task {} failed and persisted", taskData.getTaskId());
+                
+                // Check if we can retry
+                if (taskData.canRetry()) {
+                    logger.info("Retrying CLI task {} (attempt {}/{})", taskId, 
+                              taskData.getRetryCount() + 1, taskData.getMaxRetries());
+                    taskData.incrementRetryCount();
+                    taskData.setStatus("PENDING");
+                    
+                    // Persist retry attempt
+                    saveTaskData(taskData);
+                    logger.debug("Task {} retry attempt persisted", taskData.getTaskId());
+                    
+                    // Retry the task synchronously
+                    executeCLITaskSynchronously(taskData, context);
+                } else {
+                    logger.error("CLI task {} failed after {} retries", taskId, taskData.getMaxRetries());
+                    
+                    // Clean up scheduled task using db-scheduler API
+                    cleanupScheduledTaskForFailedTask(taskData.getTaskId());
+                    
+                    // Fail the entire process
+                    failProcess(taskData, result.getErrorMessage(), context);
+                }
+            }
+            
+        } catch (Exception e) {
+            logger.error("Error executing CLI task: {}", taskId, e);
+            taskData.markAsFailed("Task execution error: " + e.getMessage());
+            
+            // Persist task failure
+            saveTaskData(taskData);
+            logger.debug("Task {} failed with exception and persisted", taskData.getTaskId());
+            
+            // Clean up scheduled task using db-scheduler API
+            cleanupScheduledTaskForFailedTask(taskData.getTaskId());
+            
+            // Fail the entire process
+            failProcess(taskData, "Task execution error: " + e.getMessage(), context);
+        }
     }
 
     /**
@@ -643,6 +721,20 @@ public class ProcessOrchestrator {
             logger.debug("Task {} completed - db-scheduler will automatically clean up scheduled_tasks record for task-{}", taskId, taskId);
         } catch (Exception e) {
             logger.error("Error during task completion cleanup for: {}", taskId, e);
+        }
+    }
+
+    /**
+     * Clean up scheduled task for a failed task using db-scheduler API
+     * db-scheduler preserves failed tasks in scheduled_tasks table for debugging
+     */
+    private void cleanupScheduledTaskForFailedTask(String taskId) {
+        try {
+            // db-scheduler automatically preserves failed tasks in scheduled_tasks table
+            // This allows for debugging failed tasks
+            logger.debug("Task {} failed - db-scheduler will preserve failed scheduled_tasks record for task-{} for debugging", taskId, taskId);
+        } catch (Exception e) {
+            logger.error("Error during failed task cleanup for: {}", taskId, e);
         }
     }
 

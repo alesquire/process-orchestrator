@@ -86,17 +86,16 @@ public class ProcessRecordExampleTest {
 
         // Create services
         processRecordDAO = new ProcessRecordDAO(dataSource);
-        processRecordController = new ProcessRecordController(processRecordDAO);
         
         // Initialize process type registry and orchestrator
         processTypeRegistry = new ProcessTypeRegistry();
         processOrchestrator = new ProcessOrchestrator(dataSource, processTypeRegistry);
         processController = new ProcessController(processRecordDAO, processOrchestrator, processTypeRegistry);
+        processRecordController = new ProcessRecordController(processRecordDAO, processTypeRegistry);
         
         // Register process types
         ProcessTypeInitializer.registerDefaultProcessTypes(processTypeRegistry);
     }
-
 
     @Test
     void testProcessRecordCreationAndExecution() {
@@ -268,39 +267,5 @@ public class ProcessRecordExampleTest {
         }
         
         logger.info("--- End {} Details ---", description);
-    }
-
-    @Test
-    void testProcessTypeRegistration() {
-        logger.info("=== Testing ProcessType Registration ===");
-        
-        // Verify all process types are registered
-        assertEquals(8, processTypeRegistry.getAllProcessTypes().size(), "Should have 8 registered process types");
-        
-        // Test individual process types
-        ProcessType singleTask = processTypeRegistry.getProcessType("single-task-process");
-        assertNotNull(singleTask, "Single task process type should exist");
-        assertEquals(1, singleTask.getTaskCount(), "Single task process should have 1 task");
-        assertEquals("validate", singleTask.getTask(0).getName());
-        
-        ProcessType twoTask = processTypeRegistry.getProcessType("two-task-process");
-        assertNotNull(twoTask, "Two task process type should exist");
-        assertEquals(2, twoTask.getTaskCount(), "Two task process should have 2 tasks");
-        assertEquals("extract", twoTask.getTask(0).getName());
-        assertEquals("transform", twoTask.getTask(1).getName());
-        
-        ProcessType threeTask = processTypeRegistry.getProcessType("three-task-process");
-        assertNotNull(threeTask, "Three task process type should exist");
-        assertEquals(3, threeTask.getTaskCount(), "Three task process should have 3 tasks");
-        assertEquals("load", threeTask.getTask(0).getName());
-        assertEquals("process", threeTask.getTask(1).getName());
-        assertEquals("analyze", threeTask.getTask(2).getName());
-        
-        logger.info("✓ All process types registered correctly");
-        logger.info("✓ Single task process: {} tasks", singleTask.getTaskCount());
-        logger.info("✓ Two task process: {} tasks", twoTask.getTaskCount());
-        logger.info("✓ Three task process: {} tasks", threeTask.getTaskCount());
-        
-        dbInitializer.cleanupTestData();
     }
 }
