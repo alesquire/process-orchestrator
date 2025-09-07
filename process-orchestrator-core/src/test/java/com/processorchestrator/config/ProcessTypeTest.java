@@ -71,4 +71,26 @@ class ProcessTypeTest {
         assertSame(processType, result); // Should return same instance
         assertEquals(2, processType.getTaskCount());
     }
+
+    @Test
+    void testProcessTypeInitializerIntegration() {
+        ProcessTypeRegistry registry = new ProcessTypeRegistry();
+        ProcessTypeInitializer.registerDefaultProcessTypes(registry);
+        
+        // Test that process types are registered
+        assertTrue(registry.getAllProcessTypes().size() > 0, "Should have registered process types");
+        
+        // Test specific process types exist
+        ProcessType singleTaskProcess = registry.getProcessType("single-task-process");
+        assertNotNull(singleTaskProcess, "single-task-process should exist");
+        assertEquals(1, singleTaskProcess.getTaskCount(), "single-task-process should have 1 task");
+        
+        ProcessType twoTaskProcess = registry.getProcessType("two-task-process");
+        assertNotNull(twoTaskProcess, "two-task-process should exist");
+        assertEquals(2, twoTaskProcess.getTaskCount(), "two-task-process should have 2 tasks");
+        
+        ProcessType threeTaskProcess = registry.getProcessType("three-task-process");
+        assertNotNull(threeTaskProcess, "three-task-process should exist");
+        assertEquals(3, threeTaskProcess.getTaskCount(), "three-task-process should have 3 tasks");
+    }
 }

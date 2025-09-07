@@ -1,7 +1,7 @@
 package com.processorchestrator;
 
-import com.processorchestrator.config.ProcessType;
 import com.processorchestrator.config.ProcessTypeRegistry;
+import com.processorchestrator.config.ProcessTypeInitializer;
 import com.processorchestrator.model.ProcessInputData;
 import com.processorchestrator.service.ProcessOrchestrator;
 import org.slf4j.Logger;
@@ -27,54 +27,8 @@ public class ProcessOrchestratorApp {
         this.processTypeRegistry = new ProcessTypeRegistry();
         this.processOrchestrator = new ProcessOrchestrator(dataSource, processTypeRegistry);
         
-        // Register default process types
-        registerDefaultProcessTypes();
-    }
-
-    private void registerDefaultProcessTypes() {
-        // Data Processing Pipeline
-        ProcessType dataProcessingPipeline = new ProcessType("data-processing-pipeline", "Data processing pipeline")
-                .addTask("validate", "python scripts/validate.py ${input_file}", "/data", 30, 2)
-                .addTask("transform", "python scripts/transform.py ${input_file} ${output_dir}", "/data", 60, 3)
-                .addTask("load", "python scripts/load.py ${output_dir}", "/data", 45, 2);
-        
-        processTypeRegistry.register(dataProcessingPipeline);
-        
-        // Deployment Pipeline
-        ProcessType deploymentPipeline = new ProcessType("deployment-pipeline", "Application deployment pipeline")
-                .addTask("build", "mvn clean package", "/app", 15, 2)
-                .addTask("test", "mvn test", "/app", 20, 3)
-                .addTask("deploy", "kubectl apply -f deployment.yaml", "/app", 10, 2);
-        
-        processTypeRegistry.register(deploymentPipeline);
-        
-        // Backup Process
-        ProcessType backupProcess = new ProcessType("backup-process", "Database backup process")
-                .addTask("backup-db", "pg_dump -h localhost -U postgres mydb > ${output_dir}/backup.sql", "/backups", 30, 2)
-                .addTask("compress", "gzip ${output_dir}/backup.sql", "/backups", 5, 1)
-                .addTask("upload", "aws s3 cp ${output_dir}/backup.sql.gz s3://my-backups/", "/backups", 15, 3);
-        
-        processTypeRegistry.register(backupProcess);
-        
-        // ETL Pipeline
-        ProcessType etlPipeline = new ProcessType("etl-pipeline", "Extract, Transform, Load pipeline")
-                .addTask("extract", "python scripts/extract.py ${input_file}", "/etl", 45, 2)
-                .addTask("transform", "python scripts/transform.py ${input_file} ${output_dir}", "/etl", 90, 3)
-                .addTask("load", "python scripts/load.py ${output_dir}", "/etl", 30, 2)
-                .addTask("notify", "python scripts/notify.py ${output_dir}", "/etl", 10, 1);
-        
-        processTypeRegistry.register(etlPipeline);
-        
-        // Complete Data Processing Pipeline - Load, Process, Generate, Analyze
-        ProcessType completeDataProcessingPipeline = new ProcessType("data-processing-pipeline", "Complete data processing pipeline")
-                .addTask("load", "python scripts/load_data.py ${input_file} ${output_dir}/loaded_data.json", "/data", 30, 2)
-                .addTask("process", "python scripts/process_data.py ${output_dir}/loaded_data.json ${output_dir}/processed_data.json", "/data", 60, 3)
-                .addTask("generate", "python scripts/generate_report.py ${output_dir}/processed_data.json ${output_dir}/report.html", "/data", 45, 2)
-                .addTask("analyze", "python scripts/analyze_results.py ${output_dir}/report.html ${output_dir}/analysis.json", "/data", 30, 2);
-        
-        processTypeRegistry.register(completeDataProcessingPipeline);
-        
-        logger.info("Registered {} process types", processTypeRegistry.getAllProcessTypes().size());
+        // Register default process types using the dedicated initializer
+        ProcessTypeInitializer.registerDefaultProcessTypes(processTypeRegistry);
     }
 
     public void start() {

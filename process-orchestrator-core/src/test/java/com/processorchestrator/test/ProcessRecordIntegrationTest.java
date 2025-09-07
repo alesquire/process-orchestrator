@@ -3,6 +3,7 @@ package com.processorchestrator.test;
 import com.processorchestrator.config.DatabaseConfig;
 import com.processorchestrator.config.ProcessType;
 import com.processorchestrator.config.ProcessTypeRegistry;
+import com.processorchestrator.config.ProcessTypeInitializer;
 import com.processorchestrator.controller.ProcessController;
 import com.processorchestrator.controller.ProcessRecordController;
 import com.processorchestrator.dao.ProcessRecordDAO;
@@ -111,18 +112,8 @@ public class ProcessRecordIntegrationTest {
     private ProcessTypeRegistry createProcessTypeRegistry() {
         ProcessTypeRegistry registry = new ProcessTypeRegistry();
         
-        // Register a simple test process type (Windows compatible)
-        ProcessType testProcessType = new ProcessType("test-process", "Test process for integration testing")
-                .addTask("task1", "java -cp " + System.getProperty("user.dir") + "/target/classes com.processorchestrator.util.MessagePrinter \"Task 1 executed\"", System.getProperty("java.io.tmpdir"), 30, 2)
-                .addTask("task2", "java -cp " + System.getProperty("user.dir") + "/target/classes com.processorchestrator.util.MessagePrinter \"Task 2 executed\"", System.getProperty("java.io.tmpdir"), 30, 2);
-        
-        registry.register(testProcessType);
-        
-        // Register a ping process type (Windows compatible)
-        ProcessType pingProcessType = new ProcessType("ping-process", "Process that performs ping operations")
-                .addTask("ping-task", "ping -n 5 8.8.8.8", System.getProperty("java.io.tmpdir"), 30, 2);
-        
-        registry.register(pingProcessType);
+        // Use the ProcessTypeInitializer to register process types
+        ProcessTypeInitializer.registerDefaultProcessTypes(registry);
         
         return registry;
     }
@@ -446,7 +437,7 @@ public class ProcessRecordIntegrationTest {
         
         // Create three different process records
         String[] recordIds = {"multi-test-1", "multi-test-2", "multi-test-3"};
-        String[] processTypes = {"test-process", "test-process", "ping-process"};
+        String[] processTypes = {"single-task-process", "two-task-process", "three-task-process"};
         String[] inputData = {
             "input_file:/test/input1.json;output_dir:/test/output1",
             "input_file:/test/input2.json;output_dir:/test/output2", 

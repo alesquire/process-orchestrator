@@ -3,6 +3,7 @@ package com.processorchestrator.examples;
 import com.processorchestrator.config.DatabaseConfig;
 import com.processorchestrator.config.ProcessType;
 import com.processorchestrator.config.ProcessTypeRegistry;
+import com.processorchestrator.config.ProcessTypeInitializer;
 import com.processorchestrator.controller.ProcessController;
 import com.processorchestrator.controller.ProcessRecordController;
 import com.processorchestrator.dao.ProcessRecordDAO;
@@ -90,8 +91,8 @@ public class SingleTaskProcessTest {
         processOrchestrator = new ProcessOrchestrator(dataSource, processTypeRegistry);
         processController = new ProcessController(processRecordDAO, processOrchestrator, processTypeRegistry);
         
-        // Register the single task process type
-        registerSingleTaskProcessType();
+        // Register the test process types
+        ProcessTypeInitializer.registerTestProcessTypes(processTypeRegistry);
         
         // Start the ProcessOrchestrator scheduler
         processOrchestrator.start();
@@ -105,27 +106,6 @@ public class SingleTaskProcessTest {
         }
     }
 
-    /**
-     * Register process types with tasks that print messages to console
-     */
-    private void registerSingleTaskProcessType() {
-        logger.info("Registering process types...");
-
-        // Create a process type with one task that prints special message
-        ProcessType singleTaskProcess = new ProcessType("single-print-task", "Process that prints special message")
-                .addTask("print-text", "java -cp " + System.getProperty("user.dir") + "/target/classes com.processorchestrator.util.MessagePrinter \"!!!THIS IS A TEST MESSAGE!!!\"", System.getProperty("java.io.tmpdir"), 30, 2);
-        
-        processTypeRegistry.register(singleTaskProcess);
-        logger.info("Registered single-print-task with {} tasks", singleTaskProcess.getTaskCount());
-
-        // Create a second process type with two tasks that print different messages
-        ProcessType dualTaskProcess = new ProcessType("dual-print-task", "Process with two tasks that print different messages")
-                .addTask("print-greeting", "java -cp " + System.getProperty("user.dir") + "/target/classes com.processorchestrator.util.MessagePrinter \"=== TASK 1: GREETING === Hello from Task 1!\"", System.getProperty("java.io.tmpdir"), 30, 2)
-                .addTask("print-farewell", "java -cp " + System.getProperty("user.dir") + "/target/classes com.processorchestrator.util.MessagePrinter \"=== TASK 2: FAREWELL === Goodbye from Task 2!\"", System.getProperty("java.io.tmpdir"), 30, 2);
-        
-        processTypeRegistry.register(dualTaskProcess);
-        logger.info("Registered dual-print-task with {} tasks", dualTaskProcess.getTaskCount());
-    }
 
     @Test
     void testSingleTaskProcessExecution() {

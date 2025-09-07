@@ -10,6 +10,7 @@ import com.processorchestrator.model.TaskData;
 import com.processorchestrator.service.ProcessOrchestrator;
 import com.processorchestrator.config.ProcessTypeRegistry;
 import com.processorchestrator.config.ProcessType;
+import com.processorchestrator.config.ProcessTypeInitializer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -98,11 +99,9 @@ public class TaskErrorStorageTest {
     private ProcessTypeRegistry createProcessTypeRegistry() {
         ProcessTypeRegistry registry = new ProcessTypeRegistry();
         
-        // Create a process type that will fail
-        ProcessType failingProcessType = new ProcessType("failing-process", "Process that intentionally fails")
-                .addTask("failing-task", "cmd /c exit 1", System.getProperty("java.io.tmpdir"), 30, 0); // 0 retries
+        // Use the ProcessTypeInitializer to register process types
+        ProcessTypeInitializer.registerDefaultProcessTypes(registry);
         
-        registry.register(failingProcessType);
         return registry;
     }
 
