@@ -7,7 +7,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * Main Spring Boot application for the DB Scheduler UI module.
  * This provides a web-based dashboard for monitoring and managing db-scheduler tasks.
  */
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = {"com.processorchestrator.ui", "no.bekk.db.scheduler.ui"})
 public class DbSchedulerUiApplication {
 
     public static void main(String[] args) {

@@ -21,7 +21,7 @@
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring-boot.version>3.3.0</spring-boot.version>
-        <db-scheduler-ui.version>4.5.6</db-scheduler-ui.version>
+        <db-scheduler-ui.version>4.0.0</db-scheduler-ui.version>
     </properties>
 
     <dependencyManagement>
@@ -49,6 +49,7 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
+
 
         <!-- Spring Boot Starter Security (for securing the UI) -->
         <dependency>

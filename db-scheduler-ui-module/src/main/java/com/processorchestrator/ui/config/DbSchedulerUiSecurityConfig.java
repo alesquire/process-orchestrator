@@ -3,6 +3,7 @@ package com.processorchestrator.ui.config;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.CsrfConfigurer;
@@ -29,27 +30,21 @@ public class DbSchedulerUiSecurityConfig {
      * - All other requests are permitted
      */
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity  http) throws Exception {
         return http
                 .csrf(CsrfConfigurer::disable)
                 .authorizeHttpRequests(authz ->
                         authz
-                                // Protect the UI - both admins and users can view
-                                .requestMatchers("/db-scheduler/**").hasAnyRole("ADMIN", "USER")
-                                
-                                // Allow read access to the API for both users and admins
-                                .requestMatchers(org.springframework.http.HttpMethod.GET, "/db-scheduler-api/**")
-                                .hasAnyRole("ADMIN", "USER")
-                                
-                                // Only admins can delete tasks, alter scheduling, etc.
-                                .requestMatchers(org.springframework.http.HttpMethod.POST, "/db-scheduler-api/**")
-                                .hasRole("ADMIN")
-                                
+                                // Allow ALL db-scheduler paths without authentication for debugging
+                                .requestMatchers("/db-scheduler/**").permitAll()
                                 // Allow actuator endpoints for monitoring
                                 .requestMatchers("/actuator/**").permitAll()
-                                
-                                // All other requests are permitted
-                                .anyRequest().permitAll()
+                                // Allow test endpoint for debugging
+                                .requestMatchers("/test").permitAll()
+                                // Allow root path and error pages
+                                .requestMatchers("/", "/error").permitAll()
+                                // All other requests require authentication
+                                .anyRequest().authenticated()
                 )
                 .httpBasic(withDefaults())
                 .build();
