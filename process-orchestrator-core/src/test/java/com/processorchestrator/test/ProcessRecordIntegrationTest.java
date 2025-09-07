@@ -418,7 +418,7 @@ public class ProcessRecordIntegrationTest {
             
             assertTrue(createResponse.isSuccess(), "Process record creation should succeed for " + recordIds[i]);
             assertEquals(recordIds[i], createResponse.getData().getId());
-            assertEquals(processTypes[i], createResponse.getData().getType());
+            assertEquals(processTypes[i].getName(), createResponse.getData().getType());
             assertEquals("PENDING", createResponse.getData().getCurrentStatus());
         }
         
@@ -481,7 +481,7 @@ public class ProcessRecordIntegrationTest {
             
             assertTrue(responses[i].isSuccess(), "Process record " + (i + 1) + " creation should succeed");
             assertEquals(processIds[i], responses[i].getData().getId());
-            assertEquals(processTypeRegistry.getProcessType("single-task-process"), responses[i].getData().getType());
+            assertEquals(processTypeRegistry.getProcessType("single-task-process").getName(), responses[i].getData().getType());
             assertEquals("PENDING", responses[i].getData().getCurrentStatus());
         }
         

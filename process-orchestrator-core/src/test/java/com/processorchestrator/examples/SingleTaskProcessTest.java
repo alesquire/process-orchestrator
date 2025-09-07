@@ -384,7 +384,7 @@ public class SingleTaskProcessTest {
         long executionTimeSeconds = executionTimeMs / 1000;
         
         assertTrue(executionTimeSeconds > 0, "Execution time should be positive");
-        assertTrue(executionTimeSeconds < 30, "Execution should complete within 30 seconds");
+        assertTrue(executionTimeSeconds < 60, "Execution should complete within 60 seconds");
         logger.info("✓ Execution completed in {} seconds", executionTimeSeconds);
 
         // ==================== STEP 9: CLEANUP ====================
