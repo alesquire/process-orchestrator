@@ -32,14 +32,16 @@ public class ProcessUiController {
     public ProcessTableResponse getProcessesTable() {
         List<ProcessDetails> processes = processRecordDAO.findAll();
         
-        // Get all unique task names across all processes
+        // Get all unique task names from actual processes in the database
         Set<String> allTaskNames = new HashSet<>();
         Map<String, List<TaskData>> processTasksMap = new HashMap<>();
         
+        // Collect task names from actual process executions in the database
         for (ProcessDetails process : processes) {
             List<TaskData> tasks = processOrchestrator.getProcessTasks(process.getId());
             processTasksMap.put(process.getId(), tasks);
             
+            // Add task names from actual executed tasks
             for (TaskData task : tasks) {
                 allTaskNames.add(task.getName());
             }

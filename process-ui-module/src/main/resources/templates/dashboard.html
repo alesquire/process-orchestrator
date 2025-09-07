@@ -48,6 +48,18 @@
             font-size: 0.8em;
             color: #6c757d;
         }
+        
+        .task-cell {
+            padding: 0.25em;
+        }
+        
+        .task-name {
+            margin-bottom: 0.25em;
+        }
+        
+        .task-status {
+            margin-top: 0.25em;
+        }
     </style>
 </head>
 <body>
@@ -130,7 +142,7 @@
         <div class="card">
             <div class="card-header">
                 <h5 class="mb-0">
-                    <i class="fas fa-table"></i> Processes and Tasks
+                    <i class="fas fa-table"></i> Process Records and Tasks
                 </h5>
             </div>
             <div class="card-body p-0">
@@ -138,19 +150,20 @@
                     <table class="table table-striped table-hover process-table mb-0" id="processTable">
                         <thead>
                             <tr>
-                                <th>Process ID</th>
+                                <th colspan="4" class="text-center bg-primary text-white">Process Parameters</th>
+                                <th id="taskColumnsHeader" class="text-center bg-success text-white">Task Parameters</th>
+                            </tr>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
                                 <th>Type</th>
                                 <th>Status</th>
-                                <th>Progress</th>
-                                <th>Created</th>
-                                <th>Updated</th>
-                                <th>Triggered By</th>
-                                <th id="taskColumnsHeader">Tasks</th>
+                                <th id="taskTypeHeaders">Task Types</th>
                             </tr>
                         </thead>
                         <tbody id="processTableBody">
                             <tr>
-                                <td colspan="8" class="text-center">
+                                <td colspan="4" class="text-center">
                                     <i class="fas fa-spinner fa-spin"></i> Loading...
                                 </td>
                             </tr>
@@ -229,64 +242,61 @@
                 .catch(error => {
                     console.error('Error fetching processes:', error);
                     document.getElementById('processTableBody').innerHTML = 
-                        '<tr><td colspan="8" class="text-center text-danger">Error loading data</td></tr>';
+                        '<tr><td colspan="' + (4 + taskNames.length) + '" class="text-center text-danger">Error loading data</td></tr>';
                 });
         }
 
         function updateProcessTable(data) {
             const tbody = document.getElementById('processTableBody');
-            const headerRow = document.querySelector('#processTable thead tr');
+            const thead = document.querySelector('#processTable thead');
             
-            // Update task columns header
-            const taskHeader = document.getElementById('taskColumnsHeader');
-            taskHeader.colSpan = taskNames.length;
-            taskHeader.textContent = `Tasks (${taskNames.length})`;
-            
-            // Clear existing task columns and add new ones
-            const existingTaskHeaders = headerRow.querySelectorAll('.task-header');
-            existingTaskHeaders.forEach(header => header.remove());
-            
-            taskNames.forEach(taskName => {
-                const th = document.createElement('th');
-                th.className = 'task-header';
-                th.textContent = taskName;
-                th.style.fontSize = '0.8em';
-                headerRow.appendChild(th);
-            });
+            // Completely regenerate the table header to handle dynamic task columns
+            thead.innerHTML = `
+                <tr>
+                    <th colspan="4" class="text-center bg-primary text-white">Process Parameters</th>
+                    <th id="taskColumnsHeader" colspan="${taskNames.length}" class="text-center bg-success text-white">Task Parameters (${taskNames.length} types)</th>
+                </tr>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    ${taskNames.map(taskName => 
+                        `<th class="task-header" style="font-size: 0.8em; text-align: center; background-color: #f8f9fa;">${taskName}</th>`
+                    ).join('')}
+                </tr>
+            `;
 
             // Clear table body
             tbody.innerHTML = '';
 
             if (data.processes.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="' + (7 + taskNames.length) + '" class="text-center text-muted">No processes found</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="' + (4 + taskNames.length) + '" class="text-center text-muted">No process records found</td></tr>';
                 return;
             }
 
-            // Add process rows
+            // Add process record rows
             data.processes.forEach(process => {
                 const row = document.createElement('tr');
                 const tasks = data.processTasks[process.id] || [];
                 
-                // Create task map for quick lookup
+                // Create task map for quick lookup by task name
                 const taskMap = {};
                 tasks.forEach(task => {
-                    taskMap[task.getTaskName()] = task;
+                    taskMap[task.name] = task;
                 });
 
                 row.innerHTML = `
                     <td class="process-id">${process.id}</td>
+                    <td>${process.id}</td>
                     <td>${process.type}</td>
                     <td>${getStatusBadge(process.currentStatus)}</td>
-                    <td>${process.completedTasks || 0}/${process.totalTasks || 0}</td>
-                    <td>${formatDate(process.createdAt)}</td>
-                    <td>${formatDate(process.updatedAt)}</td>
-                    <td>${process.triggeredBy || '-'}</td>
                     ${taskNames.map(taskName => {
                         const task = taskMap[taskName];
                         if (task) {
-                            return `<td>${getStatusBadge(task.getStatus())}</td>`;
+                            return `<td class="text-center">${getTaskNameAndStatus(task.name, task.status)}</td>`;
                         } else {
-                            return '<td class="text-muted">-</td>';
+                            return '<td class="text-center text-muted">-</td>';
                         }
                     }).join('')}
                 `;
@@ -298,6 +308,23 @@
         function getStatusBadge(status) {
             const statusClass = getStatusClass(status);
             return `<span class="badge status-badge ${statusClass}">${status}</span>`;
+        }
+
+        function getTaskStatusBadge(taskName, status) {
+            const statusClass = getStatusClass(status);
+            return `<span class="badge status-badge ${statusClass}" title="${taskName}">${status}</span>`;
+        }
+
+        function getTaskNameAndStatus(taskName, status) {
+            const statusClass = getStatusClass(status);
+            return `
+                <div class="task-cell">
+                    <div class="task-name" style="font-weight: bold; font-size: 0.9em;">${taskName}</div>
+                    <div class="task-status">
+                        <span class="badge status-badge ${statusClass}">${status}</span>
+                    </div>
+                </div>
+            `;
         }
 
         function getStatusClass(status) {

@@ -594,9 +594,11 @@ public class ProcessOrchestrator {
     }
 
     /**
-     * Get all processes
-     * Note: This method is simplified and may need to be updated based on actual requirements
+     * Get the ProcessTypeRegistry
      */
+    public ProcessTypeRegistry getProcessTypeRegistry() {
+        return processTypeRegistry;
+    }
     public List<ProcessData> getAllProcesses() {
         // TODO: Implement based on simplified schema
         logger.warn("getAllProcesses method needs to be implemented for simplified schema");

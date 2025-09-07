@@ -215,11 +215,20 @@ public class ProcessController {
         return ProcessHistoryResponse.success(history, "Process history retrieved successfully");
     }
 
-    // ==================== HELPER METHODS ====================
+    /**
+     * Get all available process types
+     */
+    public List<ProcessType> getProcessTypes() {
+        return processTypeRegistry.getAllProcessTypes().values().stream()
+                .collect(java.util.stream.Collectors.toList());
+    }
 
     /**
-     * Generate a unique process ID for execution
+     * Get a specific process type by name
      */
+    public ProcessType getProcessType(String name) {
+        return processTypeRegistry.getProcessType(name);
+    }
     private String generateProcessId(String processRecordId) {
         return processRecordId + "-" + System.currentTimeMillis() + "-" + UUID.randomUUID().toString().substring(0, 8);
     }
