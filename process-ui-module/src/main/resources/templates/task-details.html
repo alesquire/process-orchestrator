@@ -114,15 +114,15 @@
             document.getElementById('task-details-tbody').innerHTML = 
                 '<tr><td colspan="2" class="text-center text-danger">Error: No task ID provided</td></tr>';
         } else {
-            document.getElementById('task-instance-id').textContent = `Task ID: ${taskId}`;
+            document.getElementById('task-instance-id').textContent = 'Task ID: ' + taskId;
             loadTaskDetails(taskId);
         }
 
         async function loadTaskDetails(taskId) {
             try {
-                const response = await fetch(`/api/task-details/${taskId}`);
+                const response = await fetch('/api/task-details/' + taskId);
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    throw new Error('HTTP error! status: ' + response.status);
                 }
                 const taskDetails = await response.json();
                 
@@ -168,10 +168,9 @@
                     const row = document.createElement('tr');
                     const value = taskDetails[param.key];
                     
-                    row.innerHTML = `
-                        <td><strong>${param.label}</strong></td>
-                        <td>${formatValue(value, param.key)}</td>
-                    `;
+                    row.innerHTML = 
+                        '<td><strong>' + param.label + '</strong></td>' +
+                        '<td>' + formatValue(value, param.key) + '</td>';
                     tbody.appendChild(row);
                 }
             });
@@ -190,7 +189,7 @@
             }
             
             // Format timestamps
-            if (key.includes('time') || key.includes('heartbeat') || key.includes('success') || key.includes('failure')) {
+            if (key.includes('started_at') || key.includes('completed_at')) {
                 try {
                     const date = new Date(value);
                     return date.toLocaleString();
@@ -199,26 +198,66 @@
                 }
             }
             
-            // Format task data (JSON)
-            if (key === 'task_data') {
-                try {
-                    const parsed = JSON.parse(value);
-                    return '<pre class="mb-0"><code>' + JSON.stringify(parsed, null, 2) + '</code></pre>';
-                } catch (e) {
-                    return value;
+            // Format status
+            if (key === 'status') {
+                const statusClass = getStatusClass(value);
+                return '<span class="badge ' + statusClass + '">' + value + '</span>';
+            }
+            
+            // Format exit code
+            if (key === 'exit_code') {
+                if (value === 0) {
+                    return '<span class="badge bg-success">0 (Success)</span>';
+                } else {
+                    return '<span class="badge bg-danger">' + value + ' (Error)</span>';
                 }
             }
             
-            // Format consecutive failures
-            if (key === 'consecutive_failures') {
+            // Format retry count
+            if (key === 'retry_count') {
                 if (value > 0) {
-                    return `<span class="badge bg-danger">${value}</span>`;
+                    return '<span class="badge bg-warning">' + value + '</span>';
                 } else {
                     return '<span class="badge bg-success">0</span>';
                 }
             }
             
+            // Format timeout minutes
+            if (key === 'timeout_minutes') {
+                return value + ' minutes';
+            }
+            
+            // Format max retries
+            if (key === 'max_retries') {
+                return value + ' retries';
+            }
+            
+            // Format task index
+            if (key === 'task_index') {
+                return 'Task ' + value;
+            }
+            
+            // Format output (long text)
+            if (key === 'output' && value && value.length > 100) {
+                return '<pre class="mb-0" style="max-height: 200px; overflow-y: auto;"><code>' + value + '</code></pre>';
+            }
+            
+            // Format error message
+            if (key === 'error_message' && value) {
+                return '<span class="text-danger">' + value + '</span>';
+            }
+            
             return value;
+        }
+        
+        function getStatusClass(status) {
+            switch (status) {
+                case 'COMPLETED': return 'bg-success';
+                case 'IN_PROGRESS': return 'bg-primary';
+                case 'FAILED': return 'bg-danger';
+                case 'STOPPED': return 'bg-secondary';
+                default: return 'bg-warning';
+            }
         }
     </script>
 </body>
